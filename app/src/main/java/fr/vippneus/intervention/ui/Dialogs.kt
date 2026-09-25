@@ -22,13 +22,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Draw
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -57,7 +56,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +63,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
@@ -224,6 +223,10 @@ fun TextEditDialog(
     onDismiss: () -> Unit,
     onConfirm: (String, Float) -> Unit,
     showSize: Boolean = true,
+    /** Clavier numérique (lecture du compteur, couple…). */
+    numeric: Boolean = false,
+    /** Aide sous le champ (ex. couple préconisé). */
+    supporting: String? = null,
 ) {
     var value by remember { mutableStateOf(TextFieldValue(initialText, TextRange(initialText.length))) }
     var size by remember { mutableFloatStateOf(initialSize) }
@@ -242,8 +245,10 @@ fun TextEditDialog(
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it },
-                    minLines = 2,
+                    minLines = if (numeric) 1 else 2,
                     maxLines = 6,
+                    keyboardOptions = KeyboardOptions(keyboardType = if (numeric) KeyboardType.Number else KeyboardType.Text),
+                    supportingText = supporting?.let { { Text(it) } },
                     shape = MaterialTheme.shapes.small,
                     colors = vipFieldColors(),
                     textStyle = MaterialTheme.typography.bodyLarge,
@@ -388,10 +393,23 @@ fun MissingDialog(missing: List<Todo>, onJump: (Todo) -> Unit, onDismiss: () -> 
                         }
                     }
                 }
+                SendAnywayNote(plural = false)
             }
         },
         confirmButton = { VipButton("Compléter le bon", { onJump(missing.first()) }, compact = true) },
         dismissButton = { TextButton(onClick = onSendAnyway) { Text("Envoyer quand même") } },
+    )
+}
+
+/** Rappel sous la liste de ce qui manque : un envoi incomplet reste possible, mais il est signalé. */
+@Composable
+private fun SendAnywayNote(plural: Boolean) {
+    Text(
+        if (plural) "Envoyés quand même, ces bons seront marqués « Envoyé incomplet » pour les corriger ensuite."
+        else "Envoyé quand même, le bon sera marqué « Envoyé incomplet » pour le corriger ensuite.",
+        style = MaterialTheme.typography.bodySmall,
+        color = Vip.colors.muted,
+        modifier = Modifier.padding(top = 4.dp),
     )
 }
 
@@ -436,6 +454,7 @@ fun IncompleteBonsDialog(
                         }
                     }
                 }
+                SendAnywayNote(plural = incomplete.size > 1)
             }
         },
         confirmButton = { VipButton("Compléter", { onOpen(incomplete.first().first) }, compact = true) },
@@ -443,65 +462,3 @@ fun IncompleteBonsDialog(
     )
 }
 
-/** Document non reconnu : fiche presse mobile (document joint) ou écriture directe sur le document. */
-@Composable
-fun ImportChoiceDialog(
-    name: String,
-    reason: String,
-    onFiche: () -> Unit,
-    onDocument: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    val c = Vip.colors
-    Dialog(onDismissRequest = onCancel) {
-        Surface(shape = MaterialTheme.shapes.extraLarge, color = c.card, modifier = Modifier.widthIn(max = 620.dp)) {
-            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconBadge(Icons.AutoMirrored.Filled.HelpOutline)
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Document non reconnu", style = MaterialTheme.typography.titleLarge)
-                        Text(name, style = MaterialTheme.typography.bodyMedium, color = c.muted, maxLines = 1)
-                    }
-                }
-                Text(reason, style = MaterialTheme.typography.bodyLarge)
-                Text("Comment voulez-vous le traiter ?", style = MaterialTheme.typography.bodyLarge, color = c.muted)
-                ChoiceCard(
-                    Icons.Filled.EditNote,
-                    "Remplir une fiche presse mobile",
-                    "Le document est joint après la fiche, comme pour Conti et Mac2.",
-                    onFiche,
-                )
-                ChoiceCard(
-                    Icons.Filled.Draw,
-                    "Écrire directement sur ce document",
-                    "Bon de livraison, document à faire signer : seule la signature du client est exigée. " +
-                        "L'original suit en page 2.",
-                    onDocument,
-                )
-                TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.End)) { Text("Annuler") }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChoiceCard(icon: ImageVector, title: String, text: String, onClick: () -> Unit) {
-    val c = Vip.colors
-    Surface(
-        onClick = onClick,
-        shape = MaterialTheme.shapes.large,
-        color = c.card,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconBadge(icon, background = c.chromeHigh, tint = c.accent, size = 48.dp)
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium)
-                Text(text, style = MaterialTheme.typography.bodyMedium, color = c.muted)
-            }
-        }
-    }
-}

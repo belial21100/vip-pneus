@@ -13,6 +13,7 @@ import androidx.lifecycle.viewModelScope
 import com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException
 import fr.vippneus.intervention.data.Attachment
 import fr.vippneus.intervention.data.AttachmentKind
+import fr.vippneus.intervention.data.Completion
 import fr.vippneus.intervention.data.DocKeys
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionRepository
@@ -55,17 +56,6 @@ sealed interface Screen {
     data class Viewer(val id: String) : Screen
 }
 
-/** Document non reconnu, en attente du choix du technicien. */
-data class PendingImport(
-    val id: String,
-    val pdf: File,
-    val name: String,
-    val info: PdfPages.Info,
-    val values: Map<String, String>,
-    /** Pourquoi le document n'est pas reconnu. */
-    val reason: String,
-)
-
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
         /** Champs remplis d'office (réglages, date du jour) : pas « lus dans le document ». */
@@ -100,9 +90,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Libellé de l'opération en cours (null = aucune). */
     private val _busy = MutableStateFlow<String?>(null)
     val busy: StateFlow<String?> = _busy.asStateFlow()
-
-    private val _pendingImport = MutableStateFlow<PendingImport?>(null)
-    val pendingImport: StateFlow<PendingImport?> = _pendingImport.asStateFlow()
 
     private val saveJobs = HashMap<String, Job>()
     private val dirty = HashSet<String>()
@@ -250,7 +237,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 K.CLIENT_MANDATAIRE, K.MANDATAIRE_ADRESSE, K.MANDATAIRE_CP, K.MONTEUR,
                 K.CLIENT_UTILISATEUR, K.UTILISATEUR_ADRESSE, K.UTILISATEUR_CP,
             )
-            InterventionType.DOCUMENT -> return message("Seules les fiches presse mobile peuvent être dupliquées")
+            InterventionType.DOCUMENT -> return message("Seules les fiches d'intervention peuvent être dupliquées")
         }
         val values = src.values.filterKeys { it in keep } + (K.DATE to Naming.today())
         val i = Intervention(id = repo.newId(), type = InterventionType.FPS, createdAt = System.currentTimeMillis(), values = values)
@@ -329,9 +316,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     Triple(pdf, PdfPages.info(pdf), result)
                 }
-                applyPlan(id, pdf, name, info, result.plan, result.reason)
-                if (result.page > 0) {
-                    message("« ${result.plan.docType} » trouvée en page ${result.page + 1} : seule cette page est utilisée.")
+                add(imported(id, pdf, name, info, result.plan))
+                navigate(Screen.Document(id))
+                when {
+                    result.page > 0 ->
+                        message("« ${result.plan.docType} » trouvée en page ${result.page + 1} : seule cette page est utilisée.")
+                    !result.readable && !image && result.plan is ImportPlan.Inconnu ->
+                        message("Pas de texte lisible (photo ou scan) : document ouvert à signer, sans les cases Mastra.")
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.IO) { repo.delete(id) }
@@ -346,77 +337,44 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private fun extracted(values: Map<String, String>): Map<String, String> =
         values.filterKeys { it !in DEFAULT_KEYS }.filterValues { it.isNotBlank() }
 
-    private fun fpsWithDocument(id: String, pdf: File, name: String, info: PdfPages.Info, values: Map<String, String>, recognized: String?): Intervention {
-        val fps = values.filterKeys { !it.startsWith("doc.") && !it.startsWith("if.") }
-        return Intervention(
+    /**
+     * Bon créé à l'import : jamais de fiche d'intervention.
+     * - feuille de tâche Mastra : on écrit dans ses cases ;
+     * - autre document (bon de livraison, bon de commande…) : document à signer ; les informations
+     *   d'un bon de commande reconnu servent seulement au nom du fichier.
+     */
+    private fun imported(id: String, pdf: File, name: String, info: PdfPages.Info, plan: ImportPlan): Intervention {
+        val base = Intervention(
             id = id,
-            type = InterventionType.FPS,
+            type = InterventionType.DOCUMENT,
             createdAt = System.currentTimeMillis(),
-            values = fps,
-            recognized = recognized,
-            autoValues = extracted(fps),
-            attachments = listOf(
-                Attachment(UUID.randomUUID().toString(), pdf.name, name, AttachmentKind.PDF, info.pageCount),
-            ),
+            source = SourceDoc(pdf.name, name, info.pageCount, info.width, info.height),
         )
-    }
-
-    private fun applyPlan(id: String, pdf: File, name: String, info: PdfPages.Info, plan: ImportPlan, reason: String?) {
-        when (plan) {
-            is ImportPlan.Fiche -> {
-                add(fpsWithDocument(id, pdf, name, info, plan.values, plan.docType))
-                navigate(Screen.Fps(id))
-            }
-            is ImportPlan.Feuille -> {
-                add(
-                    Intervention(
-                        id = id,
-                        type = InterventionType.DOCUMENT,
-                        createdAt = System.currentTimeMillis(),
-                        values = plan.values,
-                        autoValues = extracted(plan.values),
-                        template = plan.template,
-                        hints = plan.hints,
-                        recognized = plan.docType,
-                        source = SourceDoc(pdf.name, name, info.pageCount, info.width, info.height),
-                    )
-                )
-                navigate(Screen.Document(id))
-            }
-            is ImportPlan.Inconnu -> _pendingImport.value = PendingImport(
-                id, pdf, name, info, plan.values,
-                reason ?: "Ce n'est pas un modèle connu : les informations ne peuvent pas être reprises automatiquement.",
+        return when (plan) {
+            is ImportPlan.Feuille -> base.copy(
+                values = plan.values,
+                autoValues = extracted(plan.values),
+                template = plan.template,
+                hints = plan.hints,
+                recognized = plan.docType,
             )
+            is ImportPlan.Fiche -> {
+                val values = orderInfo(plan.values) + (DocKeys.DATE to Naming.today())
+                base.copy(values = values, autoValues = extracted(values), recognized = plan.docType)
+            }
+            is ImportPlan.Inconnu ->
+                base.copy(values = plan.values.filterKeys { it.startsWith("doc.") } + (DocKeys.DATE to Naming.today()))
         }
     }
 
-    enum class ImportChoice { FICHE, DOCUMENT, ANNULER }
-
-    /** Document non reconnu : fiche FPS avec le document joint, ou document complété à la main. */
-    fun resolvePendingImport(choice: ImportChoice) {
-        val p = _pendingImport.value ?: return
-        _pendingImport.value = null
-        when (choice) {
-            ImportChoice.FICHE -> {
-                add(fpsWithDocument(p.id, p.pdf, p.name, p.info, p.values, null))
-                navigate(Screen.Fps(p.id))
-            }
-            ImportChoice.DOCUMENT -> {
-                val values = p.values.filterKeys { it.startsWith("doc.") } + (DocKeys.DATE to Naming.today())
-                add(
-                    Intervention(
-                        id = p.id,
-                        type = InterventionType.DOCUMENT,
-                        createdAt = System.currentTimeMillis(),
-                        values = values,
-                        source = SourceDoc(p.pdf.name, p.name, p.info.pageCount, p.info.width, p.info.height),
-                    )
-                )
-                navigate(Screen.Document(p.id))
-            }
-            ImportChoice.ANNULER -> viewModelScope.launch(Dispatchers.IO) { repo.delete(p.id) }
-        }
-    }
+    /** Bon de commande importé comme document à signer : client, site et n° de commande pour le nom du fichier. */
+    private fun orderInfo(v: Map<String, String>): Map<String, String> = buildMap {
+        v[K.CLIENT_MANDATAIRE]?.let { put(DocKeys.CLIENT, it) }
+        v[K.CLIENT_UTILISATEUR]?.let { put(DocKeys.SITE, it.replace('\n', ' ')) }
+        v[K.UTILISATEUR_CP]?.let { put(DocKeys.CP, it) }
+        v[K.UTILISATEUR_ADRESSE]?.let { put(DocKeys.VILLE, Naming.ville(it)) }
+        v[K.NUMERO_COMMANDE]?.let { put(DocKeys.REFERENCE, it) }
+    }.filterValues { it.isNotBlank() }
 
     /** Fichier reçu d'une autre application (« Ouvrir avec », « Partager »). */
     fun receive(uri: Uri, mimeHint: String?) {
@@ -579,7 +537,19 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 context.startActivity(Intent.createChooser(intent, "Envoyer à la comptabilité"))
                 val now = System.currentTimeMillis()
-                ids.forEach { id -> update(id, touch = false) { it.copy(sentAt = now) } }
+                // Envoyé quand même alors qu'il manquait quelque chose : le bon est marqué pour être corrigé
+                ids.forEach { id ->
+                    update(id, touch = false) { it.copy(sentAt = now, sentMissing = Completion.missing(it).map { t -> t.label }) }
+                }
+                val incomplete = ids.mapNotNull { get(it) }.filter { it.sentMissing.isNotEmpty() }
+                when (incomplete.size) {
+                    0 -> {}
+                    1 -> message(
+                        "Envoyé sans : ${incomplete[0].sentMissing.joinToString(", ")}. " +
+                            "Le bon est marqué « Envoyé incomplet » pour le corriger ensuite.",
+                    )
+                    else -> message("${incomplete.size} bons envoyés incomplets : ils sont marqués pour être corrigés ensuite.")
+                }
             } catch (_: ActivityNotFoundException) {
                 message("Aucune application d'envoi (messagerie) n'est installée")
             }

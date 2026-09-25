@@ -1,5 +1,6 @@
 package fr.vippneus.intervention.ui
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
@@ -66,6 +67,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,6 +89,7 @@ import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -101,6 +104,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import fr.vippneus.intervention.R
 import fr.vippneus.intervention.data.Completion
 import fr.vippneus.intervention.data.DisplayStatus
@@ -297,10 +303,10 @@ fun statusColor(status: DisplayStatus): Color = when (status) {
     DisplayStatus.BROUILLON -> MaterialTheme.colorScheme.outline
     DisplayStatus.PRET -> Vip.colors.info
     DisplayStatus.ENVOYE -> Vip.colors.success
-    DisplayStatus.MODIFIE -> Vip.colors.warning
+    DisplayStatus.INCOMPLET, DisplayStatus.MODIFIE -> Vip.colors.warning
 }
 
-/** Pastille de statut d'un bon (brouillon, PDF prêt, envoyé, modifié après envoi). */
+/** Pastille de statut d'un bon (brouillon, PDF prêt, envoyé, envoyé incomplet, modifié après envoi). */
 @Composable
 fun StatusChip(status: DisplayStatus, modifier: Modifier = Modifier, onDark: Boolean = false) {
     val c = Vip.colors
@@ -953,6 +959,23 @@ fun SendBar(
                 VipButton("Envoyer à la compta", onSend, icon = Icons.AutoMirrored.Filled.Send)
             }
         }
+    }
+}
+
+// ------------------------------------------------------------------ plein écran
+
+/** Plein écran : barres du système masquées tant que [enabled] (un glissement depuis le bord les rappelle). */
+@Composable
+fun ImmersiveMode(enabled: Boolean) {
+    val activity = LocalActivity.current
+    val view = LocalView.current
+    DisposableEffect(enabled) {
+        val controller = activity?.window?.let { WindowCompat.getInsetsController(it, view) }
+        if (enabled && controller != null) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+        }
+        onDispose { if (enabled) controller?.show(WindowInsetsCompat.Type.systemBars()) }
     }
 }
 

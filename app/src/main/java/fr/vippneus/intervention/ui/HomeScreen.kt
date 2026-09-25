@@ -45,10 +45,10 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Draw
-import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Settings
@@ -338,7 +338,7 @@ private fun SidePanel(
             Spacer(Modifier.height(if (tight) 16.dp else 28.dp))
             ImportCard(onImport, Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
-            VipButton("Nouvelle fiche vierge", onBlank, Modifier.fillMaxWidth(), icon = Icons.Filled.EditNote, tone = Tone.CHROME)
+            NewFicheCard(onBlank, Modifier.fillMaxWidth(), compact = tight)
             Spacer(Modifier.height(if (tight) 16.dp else 32.dp))
             Overline("Suivi")
             Spacer(Modifier.height(10.dp))
@@ -385,7 +385,7 @@ private fun TopHeader(
         Row(Modifier.padding(end = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             ImportCard(onImport, Modifier.weight(1.25f))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                VipButton("Nouvelle fiche vierge", onBlank, Modifier.fillMaxWidth(), icon = Icons.Filled.EditNote, tone = Tone.CHROME)
+                VipButton("Nouvelle fiche d'intervention", onBlank, Modifier.fillMaxWidth(), icon = Icons.Filled.PostAdd, tone = Tone.CHROME)
                 Kpis(counts, filter, onFilter, compact = true)
             }
         }
@@ -414,7 +414,7 @@ private fun Overline(text: String) {
     )
 }
 
-/** Action principale : importer le PDF envoyé par le client. */
+/** Importer le document du client : feuille de tâche Mastra à remplir, ou document à faire signer. */
 @Composable
 private fun ImportCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Vip.colors
@@ -424,11 +424,39 @@ private fun ImportCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
             IconBadge(Icons.Filled.UploadFile, background = ink.copy(alpha = 0.1f), tint = ink, size = 52.dp)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text("Importer un PDF client", style = MaterialTheme.typography.titleMedium)
+                Text("Importer un document", style = MaterialTheme.typography.titleMedium)
                 Text(
-                    "Conti, Mac2, Mastra… les champs se remplissent tout seuls",
+                    "Feuille de tâche Mastra à remplir, bon de livraison à faire signer…",
                     style = MaterialTheme.typography.bodySmall,
                     color = ink.copy(alpha = 0.75f),
+                )
+            }
+        }
+    }
+}
+
+/** Créer une fiche d'intervention (Conti, Mac2…), pré-remplie par le bon de commande joint. */
+@Composable
+private fun NewFicheCard(onClick: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
+    val c = Vip.colors
+    Surface(
+        onClick = onClick,
+        color = c.chromeHigh,
+        contentColor = c.onChrome,
+        shape = MaterialTheme.shapes.large,
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+        modifier = modifier,
+    ) {
+        Row(Modifier.padding(horizontal = 18.dp, vertical = if (compact) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(Icons.Filled.PostAdd, background = c.accent.copy(alpha = 0.16f), tint = c.accent, size = if (compact) 44.dp else 52.dp)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Nouvelle fiche d'intervention", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    if (compact) "Conti, Mac2… avec le bon de commande joint"
+                    else "Conti, Mac2… : joignez le bon de commande, la fiche se remplit toute seule",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = c.onChromeMuted,
                 )
             }
         }
@@ -589,8 +617,9 @@ private fun BonsList(
                 EmptyState(
                     Icons.Filled.UploadFile,
                     "Aucun bon pour l'instant",
-                    "Importez le PDF envoyé par le client : la fiche se remplit toute seule. " +
-                        "Vous pouvez aussi ouvrir le PDF depuis la messagerie avec « Ouvrir avec » VIP Pneus.",
+                    "Importez le document du client (feuille de tâche Mastra, bon de livraison) pour le remplir " +
+                        "ou le faire signer, ou créez une fiche d'intervention pour Conti et Mac2. Un PDF peut aussi " +
+                        "s'ouvrir depuis la messagerie avec « Ouvrir avec » VIP Pneus.",
                 ) { StepsGuide(Modifier.padding(top = 16.dp)) }
             }
         } else if (loaded && shown.isEmpty()) {
@@ -670,8 +699,11 @@ private fun FilterPill(label: String, count: Int, selected: Boolean, onClick: ()
 @Composable
 private fun StepsGuide(modifier: Modifier = Modifier) {
     val steps = listOf(
-        Triple(Icons.Filled.UploadFile, "Importez le PDF du client", "Bon de commande Conti ou Mac2, feuille de tâche Mastra…"),
-        Triple(Icons.Filled.Draw, "Complétez sur place", "Horamètre, serrage, observations, puis signature du client."),
+        Triple(
+            Icons.Filled.UploadFile, "Importez ou créez",
+            "Feuille Mastra ou bon de livraison à importer ; fiche d'intervention pour Conti et Mac2, bon de commande joint.",
+        ),
+        Triple(Icons.Filled.Draw, "Complétez sur place", "Cases de la feuille, horamètre, serrage…, puis signature du client."),
         Triple(Icons.AutoMirrored.Filled.Send, "Envoyez à la compta", "Le PDF est nommé automatiquement et joint à l'e-mail."),
     )
     Row(
@@ -746,9 +778,7 @@ private fun InterventionCard(
                         Text(Naming.title(i), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         val clientFinal = i.template?.panel?.lines?.firstOrNull()?.let { i.value(it.key).trim() }.orEmpty()
                         Text(
-                            if (i.type == InterventionType.FPS) Naming.typeLabel(i.type)
-                            else listOfNotNull(i.recognized ?: Naming.typeLabel(i.type), clientFinal.ifEmpty { null }?.let { "chez $it" })
-                                .joinToString(" · "),
+                            listOfNotNull(Naming.kindLabel(i), clientFinal.ifEmpty { null }?.let { "chez $it" }).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                             color = c.muted,
                             maxLines = 1,
@@ -768,18 +798,20 @@ private fun InterventionCard(
                     if (i.attachments.isNotEmpty()) Meta(Icons.Filled.AttachFile, "${i.attachments.size}")
                 }
                 val missing = todos.filterNot { it.done }
-                if (status != DisplayStatus.ENVOYE && missing.isNotEmpty()) {
+                // Ce qui manque, en toutes lettres (ou ce qui manquait à l'envoi)
+                val note = when {
+                    status == DisplayStatus.INCOMPLET -> "Envoyé sans : " + i.sentMissing.joinToString(", ") + " — à compléter puis renvoyer"
+                    status != DisplayStatus.ENVOYE && missing.isNotEmpty() -> "À compléter : " + missing.joinToString(", ") { it.label }
+                    status == DisplayStatus.MODIFIE && i.sentMissing.isNotEmpty() -> "Complété depuis l'envoi incomplet : à renvoyer"
+                    else -> null
+                }
+                if (note != null) {
+                    val tint = if (missing.isEmpty() && status == DisplayStatus.MODIFIE) c.info else c.warning
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Filled.Warning, contentDescription = null, tint = c.warning, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Filled.Warning, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text(
-                            "À compléter : " + missing.joinToString(", ") { it.label },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = c.warning,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        Text(note, style = MaterialTheme.typography.bodySmall, color = tint, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 Spacer(Modifier.height(14.dp))
@@ -787,7 +819,7 @@ private fun InterventionCard(
                     StatusChip(status)
                     Spacer(Modifier.weight(1f))
                     val sent = i.sentAt
-                    if (status == DisplayStatus.ENVOYE && sent != null) {
+                    if ((status == DisplayStatus.ENVOYE || status == DisplayStatus.INCOMPLET) && sent != null) {
                         Text(
                             "le " + SimpleDateFormat("dd/MM à HH:mm", Locale.FRANCE).format(Date(sent)),
                             style = MaterialTheme.typography.bodySmall,

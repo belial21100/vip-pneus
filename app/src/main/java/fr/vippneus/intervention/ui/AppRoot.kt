@@ -34,7 +34,6 @@ fun AppRoot(vm: AppViewModel) {
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
     val busy by vm.busy.collectAsStateWithLifecycle()
-    val pending by vm.pendingImport.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     // Garde l'état de chaque écran (défilement, onglet...) pendant qu'on navigue
     val states = rememberSaveableStateHolder()
@@ -60,16 +59,6 @@ fun AppRoot(vm: AppViewModel) {
             ) { Text(data.visuals.message, style = MaterialTheme.typography.bodyLarge) }
         }
         busy?.let { BusyOverlay(it) }
-    }
-
-    pending?.let { p ->
-        ImportChoiceDialog(
-            name = p.name,
-            reason = p.reason,
-            onFiche = { vm.resolvePendingImport(AppViewModel.ImportChoice.FICHE) },
-            onDocument = { vm.resolvePendingImport(AppViewModel.ImportChoice.DOCUMENT) },
-            onCancel = { vm.resolvePendingImport(AppViewModel.ImportChoice.ANNULER) },
-        )
     }
 }
 

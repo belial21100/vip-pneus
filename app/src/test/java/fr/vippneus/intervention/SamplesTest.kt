@@ -47,7 +47,7 @@ class SamplesTest {
             val whole = ClientImport.inspect(pdf, "Chris.E", "25/09/26")
             println(
                 "===== [$index/entier] ${pdf.name} -> ${whole.plan.javaClass.simpleName} (${whole.plan.docType}), " +
-                    "page ${whole.page + 1}" + (whole.reason?.let { " : $it" } ?: ""),
+                    "page ${whole.page + 1}" + if (whole.readable) "" else " (sans texte lisible)",
             )
             if (pdf.name.contains("MASTRA", ignoreCase = true)) assertTrue(whole.plan is ImportPlan.Feuille)
 

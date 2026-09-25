@@ -154,17 +154,16 @@ class ImportTest {
         val plan = analyze(f)
         assertTrue(plan is ImportPlan.Inconnu)
         assertEquals("Chris.E", (plan as ImportPlan.Inconnu).values[K.MONTEUR])
-        // La raison est expliquée au technicien
-        val reason = ClientImport.inspect(f, "Chris.E", "25/09/26").reason.orEmpty()
-        assertTrue(reason, reason.contains("pas un modèle connu"))
+        assertTrue(ClientImport.inspect(f, "Chris.E", "25/09/26").readable)
     }
 
     @Test
-    fun documentScanne_raisonExpliquee() {
+    fun documentScanne_sansTexte() {
+        // Photo ou scan : rien à lire, le document s'ouvrira à signer (avec un message)
         val f = File(out, "scan.pdf").also { FakeDocs.scanned(it) }
         val r = ClientImport.inspect(f, "Chris.E", "25/09/26")
         assertTrue(r.plan is ImportPlan.Inconnu)
-        assertTrue(r.reason.orEmpty(), r.reason.orEmpty().contains("pas de texte lisible"))
+        assertFalse(r.readable)
     }
 
     @Test

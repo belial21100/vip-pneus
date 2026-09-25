@@ -1,7 +1,9 @@
 package fr.vippneus.intervention.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,13 +14,21 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -29,9 +39,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.vippneus.intervention.data.Completion
@@ -66,10 +78,18 @@ fun DocumentScreen(vm: AppViewModel, id: String) {
     var signing by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     var infosOpen by rememberSaveable { mutableStateOf(false) }
+    var fullscreen by rememberSaveable { mutableStateOf(false) }
     val signerKey = i.template?.fields?.firstOrNull { it.key.endsWith("recuPar") }?.key
+    BackHandler(enabled = fullscreen) { fullscreen = false }
+    ImmersiveMode(fullscreen)
 
     /** Emmène à l'élément manquant : case de la feuille, ou signature. */
     fun jump(t: Todo) {
+        // Plein écran : on le remplit directement sur la page
+        if (fullscreen) {
+            editor.fillRequest = t.key
+            return
+        }
         when {
             t.key == Completion.SIGNATURE && i.template?.signature != null -> {
                 tab = 0
@@ -94,7 +114,25 @@ fun DocumentScreen(vm: AppViewModel, id: String) {
     }
     val send = rememberSendAction(vm, i, todos, ::jump)
 
-    BoxWithConstraints(
+    if (fullscreen) {
+        // Toute la page pour travailler : palette d'outils, cases à remplir, et ce qui manque en bas
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Vip.colors.canvas),
+        ) {
+            PageEditor(vm, i, editor, Modifier.fillMaxSize(), fullscreen = true, onToggleFullscreen = { fullscreen = false })
+            val missing = todos.filterNot { it.done }
+            if (missing.isNotEmpty() && editor.selected == null) {
+                MissingPill(
+                    missing.map { it.label },
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 24.dp, start = 24.dp, end = 24.dp),
+                ) { jump(missing.first()) }
+            }
+        }
+    } else BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),
@@ -104,7 +142,7 @@ fun DocumentScreen(vm: AppViewModel, id: String) {
             VipTopBar(
                 title = Naming.title(i),
                 subtitle = listOfNotNull(
-                    i.recognized ?: "Document client",
+                    Naming.kindLabel(i),
                     Naming.reference(i).takeIf { it.isNotEmpty() },
                     Naming.formatShort(Naming.interventionDate(i)),
                 ).joinToString("  ·  "),
@@ -121,6 +159,7 @@ fun DocumentScreen(vm: AppViewModel, id: String) {
                     DocumentForm(
                         vm, i, nav, todos, ::jump,
                         onSign = { signing = true },
+                        onResend = send,
                         infosOpen = infosOpen,
                         onToggleInfos = { infosOpen = !infosOpen },
                         signerKey = signerKey,
@@ -128,7 +167,7 @@ fun DocumentScreen(vm: AppViewModel, id: String) {
                     )
                 }
                 if (wide || tab == 1) {
-                    PageEditor(vm, i, editor, Modifier.weight(if (wide) 0.56f else 1f))
+                    PageEditor(vm, i, editor, Modifier.weight(if (wide) 0.56f else 1f), onToggleFullscreen = { fullscreen = true })
                 }
             }
             SendBar(
@@ -182,6 +221,7 @@ private fun DocumentForm(
     todos: List<Todo>,
     onJump: (Todo) -> Unit,
     onSign: () -> Unit,
+    onResend: () -> Unit,
     infosOpen: Boolean,
     onToggleInfos: () -> Unit,
     signerKey: String?,
@@ -222,11 +262,11 @@ private fun DocumentForm(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        i.recognized?.let {
+        SentIncompleteBanner(i, todos, onResend)
+        if (t != null) {
             RecognizedBanner(
-                it,
-                text = if (t != null) "Les valeurs saisies s'écrivent directement à leur place sur le document ; l'original suit en page 2."
-                else null,
+                i.recognized ?: t.name,
+                text = "Les valeurs saisies s'écrivent directement à leur place sur le document ; l'original suit en page 2.",
             )
         }
         TodoPanel(todos, onJump)
@@ -280,11 +320,19 @@ private fun DocumentForm(
                 )
             }
         } else {
+            // Document à signer. Un bon de commande importé ne devient pas une fiche d'intervention :
+            // elle se crée à part, et ce document y est joint.
+            val order = i.recognized
             InfoBanner(
                 icon = Icons.Filled.TouchApp,
-                title = "Écrivez directement sur la page",
-                text = "Seule la signature du client est exigée. Choisissez Texte, Date, Croix ou Signature " +
-                    "au-dessus de la page, puis touchez l'endroit voulu ; glissez un élément pour le déplacer.",
+                title = if (order != null) "$order : document à signer" else "Écrivez directement sur la page",
+                text = if (order != null) {
+                    "Seule la signature du client est exigée. S'il faut une fiche d'intervention, créez-la avec " +
+                        "« Nouvelle fiche d'intervention » et joignez-y ce document : elle se remplira toute seule."
+                } else {
+                    "Seule la signature du client est exigée. Choisissez Texte, Date, Croix ou Signature " +
+                        "au-dessus de la page, puis touchez l'endroit voulu ; glissez un élément pour le déplacer."
+                },
                 background = Vip.colors.infoSoft,
                 content = Vip.colors.info,
             )
@@ -323,6 +371,35 @@ private fun DocumentForm(
         PdfContentCard(vm, i, nav.anchor("pdf"))
 
         Spacer(Modifier.height(32.dp))
+    }
+}
+
+/** Plein écran : ce qui manque encore ; un appui ouvre le premier élément sur la page. */
+@Composable
+private fun MissingPill(labels: List<String>, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = Vip.colors
+    Surface(
+        onClick = onClick,
+        shape = CircleShape,
+        color = c.warningSoft,
+        contentColor = c.warning,
+        shadowElevation = 8.dp,
+        modifier = modifier.widthIn(max = 720.dp),
+    ) {
+        Row(Modifier.padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Warning, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "Manque : " + labels.joinToString(", "),
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text("Remplir", style = MaterialTheme.typography.labelLarge)
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
+        }
     }
 }
 

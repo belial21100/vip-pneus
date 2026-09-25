@@ -124,8 +124,10 @@ object Naming {
         InterventionType.DOCUMENT -> i.value(DocKeys.REFERENCE)
     }.trim()
 
-    fun typeLabel(t: InterventionType) = when (t) {
-        InterventionType.FPS -> "Fiche presse mobile"
-        InterventionType.DOCUMENT -> "Document client"
+    /** Nature du bon : fiche d'intervention, feuille du client à remplir (Mastra) ou document à signer. */
+    fun kindLabel(i: Intervention): String = when {
+        i.type == InterventionType.FPS -> "Fiche d'intervention"
+        i.template != null -> i.recognized ?: i.template.name
+        else -> "Document à signer"
     }
 }

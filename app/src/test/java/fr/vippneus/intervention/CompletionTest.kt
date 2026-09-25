@@ -1,6 +1,7 @@
 package fr.vippneus.intervention
 
 import fr.vippneus.intervention.data.Completion
+import fr.vippneus.intervention.data.DisplayStatus
 import fr.vippneus.intervention.data.DocTemplate
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
@@ -9,6 +10,7 @@ import fr.vippneus.intervention.data.OverlayKind
 import fr.vippneus.intervention.data.PlacedBox
 import fr.vippneus.intervention.data.PlacedField
 import fr.vippneus.intervention.data.SignatureData
+import fr.vippneus.intervention.data.displayStatus
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -97,6 +99,19 @@ class CompletionTest {
         val client = empty.copy(values = mapOf(K.CLIENT_UTILISATEUR to "Entrepôt Test"))
         assertFalse(K.CLIENT_MANDATAIRE in Completion.missingFields(client))
         assertFalse("Client" in missing(client))
+    }
+
+    @Test
+    fun envoiIncomplet_marqueJusquAuRenvoi() {
+        val i = Intervention("x", InterventionType.DOCUMENT, 0L, updatedAt = 100L)
+        assertEquals(DisplayStatus.BROUILLON, i.displayStatus())
+        // Envoyé quand même sans la signature : à corriger
+        val incomplet = i.copy(sentAt = 200L, sentMissing = listOf("Signature du client"))
+        assertEquals(DisplayStatus.INCOMPLET, incomplet.displayStatus())
+        // Complété ensuite : à renvoyer
+        assertEquals(DisplayStatus.MODIFIE, incomplet.copy(updatedAt = 300L).displayStatus())
+        // Renvoyé complet
+        assertEquals(DisplayStatus.ENVOYE, incomplet.copy(updatedAt = 300L, sentAt = 400L, sentMissing = emptyList()).displayStatus())
     }
 
     @Test

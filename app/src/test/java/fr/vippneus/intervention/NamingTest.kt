@@ -1,6 +1,7 @@
 package fr.vippneus.intervention
 
 import fr.vippneus.intervention.data.DocKeys
+import fr.vippneus.intervention.data.DocTemplate
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Naming
@@ -90,6 +91,17 @@ class NamingTest {
         // Dès qu'un client est saisi, il reprend sa place
         val client = i.copy(values = i.values + (DocKeys.CLIENT to "Client Test"))
         assertEquals("CLIENT TEST 25-09-2026 CE", Naming.defaultFileName(client, "CE"))
+    }
+
+    @Test
+    fun natureDuBon() {
+        assertEquals("Fiche d'intervention", Naming.kindLabel(fps()))
+        val doc = Intervention(id = "x", type = InterventionType.DOCUMENT, createdAt = 0L)
+        assertEquals("Document à signer", Naming.kindLabel(doc))
+        // Un bon de commande importé reste un document à signer
+        assertEquals("Document à signer", Naming.kindLabel(doc.copy(recognized = "Bon de commande Manuloc")))
+        val t = DocTemplate("interfit", "Feuille de tâche Mastra", emptyList())
+        assertEquals("Feuille de tâche Mastra", Naming.kindLabel(doc.copy(template = t, recognized = "Feuille de tâche Mastra")))
     }
 
     @Test

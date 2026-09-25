@@ -26,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
@@ -35,6 +36,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.ReportProblem
+import androidx.compose.material.icons.filled.TaskAlt
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -89,9 +92,12 @@ import fr.vippneus.intervention.pdf.SignatureOp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.File
+import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 // ------------------------------------------------------------------ navigation dans le formulaire
@@ -477,6 +483,36 @@ private fun AttachmentRow(
 }
 
 // ------------------------------------------------------------------ envoi
+
+/**
+ * Bon envoyé alors qu'il était incomplet : ce qu'il manquait, puis, une fois complété,
+ * le rappel de le renvoyer à la comptabilité.
+ */
+@Composable
+fun SentIncompleteBanner(i: Intervention, todos: List<Todo>, onResend: () -> Unit) {
+    val sent = i.sentAt ?: return
+    if (i.sentMissing.isEmpty()) return
+    val c = Vip.colors
+    val date = SimpleDateFormat("dd/MM 'à' HH:mm", Locale.FRANCE).format(Date(sent))
+    if (todos.any { !it.done }) {
+        InfoBanner(
+            icon = Icons.Filled.ReportProblem,
+            title = "Envoyé incomplet le $date",
+            text = "Il manquait : ${i.sentMissing.joinToString(", ")}. Complétez le bon, puis renvoyez-le à la comptabilité.",
+            background = c.warningSoft,
+            content = c.warning,
+        )
+    } else {
+        InfoBanner(
+            icon = Icons.Filled.TaskAlt,
+            title = "Complété depuis l'envoi incomplet du $date",
+            text = "Renvoyez-le à la comptabilité pour transmettre la version complète.",
+            background = c.successSoft,
+            content = c.success,
+            action = { VipButton("Renvoyer", onResend, icon = Icons.AutoMirrored.Filled.Send, compact = true) },
+        )
+    }
+}
 
 /**
  * Action « Envoyer » : s'il manque des éléments, le technicien est prévenu avant

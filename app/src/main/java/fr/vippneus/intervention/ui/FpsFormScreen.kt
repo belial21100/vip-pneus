@@ -1,5 +1,7 @@
 package fr.vippneus.intervention.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Handyman
 import androidx.compose.material.icons.filled.PrecisionManufacturing
@@ -158,7 +161,7 @@ fun FpsFormScreen(vm: AppViewModel, id: String) {
             VipTopBar(
                 title = Naming.title(i),
                 subtitle = listOfNotNull(
-                    "Fiche presse mobile",
+                    Naming.kindLabel(i),
                     Naming.reference(i).takeIf { it.isNotEmpty() }?.let { "N° $it" },
                     Naming.formatShort(Naming.interventionDate(i)),
                 ).joinToString("  ·  "),
@@ -176,7 +179,7 @@ fun FpsFormScreen(vm: AppViewModel, id: String) {
                     .fillMaxWidth(),
             ) {
                 if (wide || tab == 0) {
-                    FpsForm(form, todos, ::jump, onSign = { signing = true }, Modifier.weight(if (wide) 0.56f else 1f))
+                    FpsForm(form, todos, ::jump, onSign = { signing = true }, onResend = send, Modifier.weight(if (wide) 0.56f else 1f))
                 }
                 if (wide || tab == 1) {
                     PagePreviewPane(vm, i, Modifier.weight(if (wide) 0.44f else 1f))
@@ -226,7 +229,7 @@ fun FpsFormScreen(vm: AppViewModel, id: String) {
 }
 
 @Composable
-private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSign: () -> Unit, modifier: Modifier) {
+private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSign: () -> Unit, onResend: () -> Unit, modifier: Modifier) {
     val vm = form.vm
     val i = form.i
     val nav = form.nav
@@ -237,6 +240,10 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
         if (section in expected) {
             { SectionStatus(section !in incomplete) }
         } else null
+    // Bon de commande du client (Mac2, Conti…) : joint à la fiche, il la pré-remplit
+    val pickOrder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.addAttachment(i.id, uri)
+    }
     Column(modifier.fillMaxHeight()) {
         SectionNavRow(SECTIONS, incomplete) { nav.go(it) }
         Column(
@@ -248,7 +255,24 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
+            SentIncompleteBanner(i, todos, onResend)
             i.recognized?.let { RecognizedBanner(it) }
+            if (i.attachments.isEmpty()) {
+                InfoBanner(
+                    icon = Icons.Filled.AttachFile,
+                    title = "Joindre le bon de commande du client",
+                    text = "Mac2, Conti… : ses informations remplissent la fiche, et il la suit dans le PDF.",
+                    action = {
+                        VipButton(
+                            "Joindre",
+                            { pickOrder.launch(arrayOf("application/pdf", "image/*")) },
+                            icon = Icons.Filled.AttachFile,
+                            tone = Tone.DARK,
+                            compact = true,
+                        )
+                    },
+                )
+            }
             TodoPanel(todos, onJump)
 
             SectionCard("Commande et client", nav.anchor("client"), icon = Icons.AutoMirrored.Filled.Assignment, trailing = status("client")) {

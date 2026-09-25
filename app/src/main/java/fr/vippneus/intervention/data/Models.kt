@@ -161,6 +161,11 @@ data class Intervention(
     val fileName: String = "",
     val generatedAt: Long? = null,
     val sentAt: Long? = null,
+    /**
+     * Ce qui manquait au dernier envoi (« Envoyer quand même ») : le bon est marqué
+     * « Envoyé incomplet » jusqu'à ce qu'il soit complété et renvoyé.
+     */
+    val sentMissing: List<String> = emptyList(),
     /** Valeurs lues dans le document du client à l'import (à vérifier par le technicien). */
     val autoValues: Map<String, String> = emptyMap(),
 ) {
@@ -184,11 +189,13 @@ enum class DisplayStatus(val label: String) {
     BROUILLON("Brouillon"),
     PRET("PDF prêt"),
     ENVOYE("Envoyé"),
+    /** Envoyé alors qu'il manquait quelque chose : à corriger puis renvoyer. */
+    INCOMPLET("Envoyé incomplet"),
     MODIFIE("Modifié après envoi"),
 }
 
 fun Intervention.displayStatus(): DisplayStatus = when {
-    sentAt != null && updatedAt <= sentAt -> DisplayStatus.ENVOYE
+    sentAt != null && updatedAt <= sentAt -> if (sentMissing.isEmpty()) DisplayStatus.ENVOYE else DisplayStatus.INCOMPLET
     sentAt != null -> DisplayStatus.MODIFIE
     generatedAt != null && updatedAt <= generatedAt -> DisplayStatus.PRET
     else -> DisplayStatus.BROUILLON

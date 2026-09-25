@@ -1,5 +1,6 @@
 package fr.vippneus.intervention.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -37,8 +38,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
@@ -69,24 +73,31 @@ fun EditorScreen(vm: AppViewModel, id: String) {
         return
     }
     val state = remember(id) { EditorState() }
+    var fullscreen by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = fullscreen) { fullscreen = false }
+    ImmersiveMode(fullscreen)
     Column(
         Modifier
             .fillMaxSize()
             .background(Vip.colors.canvas),
     ) {
-        VipTopBar(
-            title = "Ajuster la mise en page",
-            subtitle = "Glissez un texte pour le déplacer · touchez-le pour changer sa taille",
-            onBack = { vm.back() },
-        ) {
-            VipButton("Terminé", { vm.back() }, icon = Icons.Filled.Check, compact = true)
+        if (!fullscreen) {
+            VipTopBar(
+                title = "Ajuster la mise en page",
+                subtitle = "Glissez un texte pour le déplacer · touchez-le pour changer sa taille",
+                onBack = { vm.back() },
+            ) {
+                VipButton("Terminé", { vm.back() }, icon = Icons.Filled.Check, compact = true)
+            }
         }
         PageEditor(
             vm, i, state,
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .navigationBarsPadding(),
+                .then(if (fullscreen) Modifier else Modifier.navigationBarsPadding()),
+            fullscreen = fullscreen,
+            onToggleFullscreen = { fullscreen = !fullscreen },
         )
     }
 }

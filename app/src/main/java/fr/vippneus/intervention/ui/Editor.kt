@@ -34,10 +34,13 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FitScreen
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.TouchApp
+import androidx.compose.material.icons.filled.WidthFull
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,6 +52,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -64,15 +68,23 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.vippneus.intervention.pdf.PageOps
+import fr.vippneus.intervention.data.Completion
 import fr.vippneus.intervention.data.FieldAdjust
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
@@ -80,8 +92,10 @@ import fr.vippneus.intervention.data.Naming
 import fr.vippneus.intervention.data.Overlay
 import fr.vippneus.intervention.data.OverlayKind
 import fr.vippneus.intervention.data.SignatureData
+import fr.vippneus.intervention.pdf.Box as PageBox
 import fr.vippneus.intervention.pdf.CrossOp
 import fr.vippneus.intervention.pdf.DrawOp
+import fr.vippneus.intervention.pdf.FpsLayout
 import fr.vippneus.intervention.pdf.FpsTemplate
 import fr.vippneus.intervention.pdf.PanelOp
 import fr.vippneus.intervention.pdf.SignatureOp
@@ -116,6 +130,8 @@ fun Intervention.restore(s: EditSnapshot) = copy(values = s.values, signature = 
 class EditorState {
     var tool by mutableStateOf(Tool.NONE)
     var selected by mutableStateOf<String?>(null)
+    /** Élément à remplir tout de suite sur la page (touché dans « Manque : … » en plein écran). */
+    var fillRequest by mutableStateOf<String?>(null)
     var zoom by mutableFloatStateOf(1f)
     var pan by mutableStateOf(Offset.Zero)
     val undo = mutableStateListOf<EditSnapshot>()
@@ -145,6 +161,7 @@ private const val MAX_FONT = 60f
 /**
  * Éditeur de la page 1 : déplacer / agrandir les textes, ajouter texte, date, croix, signature.
  * Pincer pour zoomer, glisser à deux doigts pour se déplacer.
+ * Sur une feuille du client (Mastra), les cases vides sont repérées en jaune : un appui les remplit.
  */
 @Composable
 fun PageEditor(
@@ -152,6 +169,9 @@ fun PageEditor(
     intervention: Intervention,
     state: EditorState,
     modifier: Modifier = Modifier,
+    fullscreen: Boolean = false,
+    /** Bouton plein écran, en tête des boutons de zoom (absent si null). */
+    onToggleFullscreen: (() -> Unit)? = null,
 ) {
     val id = intervention.id
     val measure = rememberMeasure()
@@ -168,6 +188,10 @@ fun PageEditor(
 
     val current by rememberUpdatedState(intervention)
     val currentOps by rememberUpdatedState(ops)
+    // Cases vides de la feuille du client : repérées sur la page, un appui les remplit
+    val slots = remember(intervention) { emptySlots(intervention) }
+    val currentSlots by rememberUpdatedState(slots)
+    val slotText = rememberTextMeasurer()
 
     fun snapshot() = state.push(current.editSnapshot())
 
@@ -195,7 +219,40 @@ fun PageEditor(
         state.selected = o.id
     }
 
+    /** Saisie de la valeur d'un champ placé (case de la feuille du client, ou champ de la fiche). */
+    fun editField(key: String) {
+        textDialog = TextDialogRequest(key, Offset.Zero, current.value(key), 0f, fpsField = true)
+    }
+
+    fun isTextField(key: String) =
+        current.template?.fields?.any { it.key == key } == true ||
+            (current.type == InterventionType.FPS && FpsTemplate.fieldsByKey[key] != null)
+
+    /** Case vide touchée avec l'outil adapté (ou sans outil) : on la remplit directement. */
+    fun fillSlot(p: Offset): Boolean {
+        val slot = currentSlots.firstOrNull { it.box.contains(p.x, p.y, 4f) } ?: return false
+        val date = slot.key.substringAfterLast('.').startsWith("date")
+        val ok = when (state.tool) {
+            Tool.NONE -> true
+            Tool.TEXT -> !slot.signature
+            Tool.DATE -> date
+            Tool.SIGNATURE -> slot.signature
+            Tool.CROSS -> false
+        }
+        if (!ok) return false
+        val tool = state.tool
+        state.tool = Tool.NONE
+        state.selected = null
+        when {
+            slot.signature -> redoFpsSignature = true
+            tool == Tool.DATE -> edit { it.copy(values = it.values + (slot.key to Naming.today())) }
+            else -> editField(slot.key)
+        }
+        return true
+    }
+
     fun onTap(p: Offset, hit: String?) {
+        if (hit == null && fillSlot(p)) return
         when (state.tool) {
             Tool.TEXT -> {
                 textDialog = TextDialogRequest(null, p, "", 14f)
@@ -213,8 +270,11 @@ fun PageEditor(
             Tool.SIGNATURE -> signatureAt = p
             Tool.NONE -> {
                 if (hit != null && hit == state.selected) {
-                    overlay(hit)?.takeIf { it.kind == OverlayKind.TEXT }?.let {
-                        textDialog = TextDialogRequest(it.id, Offset(it.x, it.y), it.text, it.fontSize)
+                    // Second appui sur l'élément choisi : modifier son texte
+                    val o = overlay(hit)
+                    when {
+                        o?.kind == OverlayKind.TEXT -> textDialog = TextDialogRequest(o.id, Offset(o.x, o.y), o.text, o.fontSize)
+                        o == null && isTextField(hit) -> editField(hit)
                     }
                 } else {
                     state.selected = hit
@@ -326,6 +386,7 @@ fun PageEditor(
                 drawRect(Color.Black.copy(alpha = 0.25f), topLeft + Offset(0f, 6f), pageSize)
                 drawRect(Color.Black.copy(alpha = 0.12f), topLeft + Offset(-3f, 3f), Size(pageSize.width + 6f, pageSize.height + 8f))
                 drawPage(renderer, background, ops, topLeft, pageSize, pageW)
+                slots.forEach { drawSlot(it, topLeft, scale, slotText) }
                 state.selected?.let { key ->
                     ops.firstOrNull { it.key == key }?.let { drawSelection(it.bounds, topLeft, scale, selectionColor) }
                 }
@@ -334,6 +395,47 @@ fun PageEditor(
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = c.accent)
                     Text("Chargement de la page…", color = c.onChrome, modifier = Modifier.padding(top = 12.dp))
+                }
+            }
+
+            // Plein écran et zoom, sur le bord droit
+            Surface(
+                color = c.chrome,
+                contentColor = c.onChrome,
+                shape = RoundedCornerShape(18.dp),
+                shadowElevation = 10.dp,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 12.dp),
+            ) {
+                Column(Modifier.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (onToggleFullscreen != null) {
+                        IconButton(onClick = onToggleFullscreen) {
+                            Icon(
+                                if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                                contentDescription = if (fullscreen) "Quitter le plein écran" else "Plein écran",
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .padding(vertical = 4.dp)
+                                .width(28.dp)
+                                .height(1.dp)
+                                .background(c.onChrome.copy(alpha = 0.2f)),
+                        )
+                    }
+                    IconButton(onClick = { state.zoom = min(6f, state.zoom * 1.5f) }) { Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom +") }
+                    IconButton(onClick = {
+                        state.zoom = max(1f, state.zoom / 1.5f)
+                        if (state.zoom <= 1.001f) state.pan = Offset.Zero
+                    }) { Icon(Icons.Filled.ZoomOut, contentDescription = "Zoom −") }
+                    IconButton(onClick = {
+                        // Toute la largeur de la page, haut de la page sous la palette
+                        val z = ((viewW - 2 * margin) / pageW / fitScale).coerceIn(1f, 6f)
+                        state.zoom = z
+                        state.pan = if (z <= 1.001f) Offset.Zero else Offset(0f, top - center.y + fit.height * z / 2f)
+                    }) { Icon(Icons.Filled.WidthFull, contentDescription = "Largeur de la page") }
+                    IconButton(onClick = { state.zoom = 1f; state.pan = Offset.Zero }) { Icon(Icons.Filled.FitScreen, contentDescription = "Page entière") }
                 }
             }
 
@@ -376,12 +478,6 @@ fun PageEditor(
                             enabled = state.undo.isNotEmpty(),
                             colors = IconButtonDefaults.iconButtonColors(contentColor = c.onChrome, disabledContentColor = c.onChrome.copy(alpha = 0.3f)),
                         ) { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Annuler la dernière modification") }
-                        IconButton(onClick = {
-                            state.zoom = max(1f, state.zoom / 1.5f)
-                            if (state.zoom <= 1.001f) state.pan = Offset.Zero
-                        }) { Icon(Icons.Filled.ZoomOut, contentDescription = "Zoom −") }
-                        IconButton(onClick = { state.zoom = min(6f, state.zoom * 1.5f) }) { Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom +") }
-                        IconButton(onClick = { state.zoom = 1f; state.pan = Offset.Zero }) { Icon(Icons.Filled.FitScreen, contentDescription = "Page entière") }
                     }
                 }
                 if (state.tool != Tool.NONE) {
@@ -467,8 +563,21 @@ fun PageEditor(
         }
     }
 
+    // Élément demandé depuis « Manque : … » (plein écran) : on l'ouvre directement
+    LaunchedEffect(state.fillRequest) {
+        val key = state.fillRequest ?: return@LaunchedEffect
+        state.fillRequest = null
+        state.selected = null
+        when {
+            key == Completion.SIGNATURE && current.template?.signature != null -> redoFpsSignature = true
+            key == Completion.SIGNATURE -> state.tool = Tool.SIGNATURE
+            else -> editField(key)
+        }
+    }
+
     textDialog?.let { req ->
         val fpsField = req.fpsField
+        val placed = if (fpsField) intervention.template?.fields?.firstOrNull { it.key == req.id } else null
         TextEditDialog(
             title = when {
                 fpsField -> PageOps.fieldLabel(intervention, req.id ?: "") ?: "Modifier"
@@ -478,6 +587,8 @@ fun PageEditor(
             initialText = req.text,
             initialSize = if (fpsField) 14f else req.size,
             showSize = !fpsField,
+            numeric = placed?.numeric == true,
+            supporting = placed?.let { f -> intervention.hints[f.key] ?: f.hint.ifEmpty { null } },
             quickInserts = quickInserts(settings.technicien),
             onDismiss = { textDialog = null },
             onConfirm = { text, size ->
@@ -533,6 +644,47 @@ fun PageEditor(
                 redoFpsSignature = false
                 if (sig != null) edit { it.copy(signature = sig) }
             },
+        )
+    }
+}
+
+/** Case vide d'une feuille du client (Mastra), repérée sur la page. */
+private data class Slot(val key: String, val label: String, val box: PageBox, val signature: Boolean = false)
+
+private fun emptySlots(i: Intervention): List<Slot> {
+    val t = i.template ?: return emptyList()
+    val fields = t.fields.filter { i.value(it.key).isBlank() }.map { f ->
+        val a = i.adjust[f.key]
+        Slot(f.key, f.label.substringBefore(" ("), PageBox(f.left, f.top, f.right, f.bottom).offset(a?.dx ?: 0f, a?.dy ?: 0f))
+    }
+    val signature = t.signature?.takeIf { i.signature?.isEmpty != false }?.let { b ->
+        Slot("slot.signature", "Signature", FpsLayout.scaledBox(PageBox(b.left, b.top, b.right, b.bottom), i.adjust[FpsTemplate.K.SIGNATURE]), signature = true)
+    }
+    return fields + listOfNotNull(signature)
+}
+
+/** Case à remplir : fond jaune pâle, pointillés et libellé (si la case est assez grande à l'écran). */
+private fun DrawScope.drawSlot(slot: Slot, topLeft: Offset, scale: Float, measurer: TextMeasurer) {
+    val tl = Offset(topLeft.x + slot.box.left * scale, topLeft.y + slot.box.top * scale)
+    val size = Size(slot.box.width * scale, slot.box.height * scale)
+    drawRect(Palette.Amber.copy(alpha = 0.22f), tl, size)
+    drawRect(
+        Palette.AmberDeep, tl, size,
+        style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f))),
+    )
+    if (size.height >= 14f && size.width >= 48f) {
+        val avail = size.width - 12f
+        var fontPx = (size.height * 0.5f).coerceIn(10f, 22f)
+        // Libellé réduit pour tenir dans la case (coupé seulement en dessous de 9 px)
+        val natural = measurer.measure(slot.label, TextStyle(fontSize = fontPx.toSp()), softWrap = false, maxLines = 1).size.width
+        if (natural > avail) fontPx = max(9f, fontPx * avail / natural)
+        drawText(
+            measurer, slot.label,
+            topLeft = tl + Offset(6f, (size.height - fontPx * 1.3f) / 2f),
+            style = TextStyle(color = Palette.AmberInk, fontSize = fontPx.toSp()),
+            overflow = TextOverflow.Ellipsis,
+            maxLines = 1,
+            size = Size(avail, fontPx * 1.4f),
         )
     }
 }

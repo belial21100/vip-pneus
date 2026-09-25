@@ -16,6 +16,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
@@ -25,11 +26,15 @@ import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import fr.vippneus.intervention.data.Completion
+import fr.vippneus.intervention.data.DisplayStatus
+import fr.vippneus.intervention.data.DocKeys
+import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Overlay
 import fr.vippneus.intervention.data.OverlayKind
 import fr.vippneus.intervention.data.Settings
 import fr.vippneus.intervention.data.SettingsStore
 import fr.vippneus.intervention.data.SignatureData
+import fr.vippneus.intervention.data.displayStatus
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import fr.vippneus.intervention.ui.AppRoot
 import fr.vippneus.intervention.ui.AppViewModel
@@ -119,6 +124,17 @@ class UiFlowTest {
         while (!condition() && System.currentTimeMillis() < deadline) tick()
     }
 
+    /** Fiche d'intervention créée à la main, puis bon de commande (fictif) joint : elle se pré-remplit. */
+    private fun ficheAvecBonDeCommande(vm: AppViewModel): String {
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val order = File(app.cacheDir, "Bon de commande 7654321.pdf").also { FakeDocs.manuloc(it) }
+        val id = vm.createFps()
+        vm.navigate(Screen.Fps(id))
+        vm.addAttachment(id, Uri.fromFile(order))
+        waitFor { vm.interventions.value.first { it.id == id }.attachments.isNotEmpty() }
+        return id
+    }
+
     private fun input(label: String, text: String) {
         compose.onNode(hasText(label) and hasSetTextAction()).performTextInput(text)
     }
@@ -135,7 +151,7 @@ class UiFlowTest {
         compose.setContent { VipTheme { AppRoot(vm) } }
         snap("01-accueil-vide")
 
-        compose.onNodeWithText("Nouvelle fiche vierge").performClick()
+        compose.onNodeWithText("Nouvelle fiche d'intervention").performClick()
         compose.waitForIdle()
         assertTrue(vm.backStack.last() is Screen.Fps)
         input("Client mandataire", "Loc Manutention")
@@ -258,7 +274,7 @@ class UiFlowTest {
         configure(vm)
         compose.setContent { VipTheme { AppRoot(vm) } }
         snap("07a-accueil-portrait")
-        compose.onNodeWithText("Nouvelle fiche vierge").performClick()
+        compose.onNodeWithText("Nouvelle fiche d'intervention").performClick()
         snap("07-fiche-portrait-saisie")
         compose.onNodeWithText("Aperçu").performClick()
         snap("08-fiche-portrait-apercu")
@@ -299,20 +315,20 @@ class UiFlowTest {
     }
 
     @Test
-    fun bonDeCommande_ficheRemplieAutomatiquement() {
+    fun ficheIntervention_bonDeCommandeJoint() {
         val vm = newVm()
         configure(vm)
-        val app = ApplicationProvider.getApplicationContext<Application>()
-        val src = File(app.cacheDir, "Bon de commande 7654321.pdf").also { FakeDocs.manuloc(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
-        vm.importClient(Uri.fromFile(src))
-        waitFor { vm.backStack.last() is Screen.Fps }
-        assertTrue(vm.backStack.last() is Screen.Fps)
+        idle()
+        val id = ficheAvecBonDeCommande(vm)
         idle()
         snap("10-fiche-auto-bon-de-commande")
+        // Les informations du bon de commande ont rempli la fiche
+        val fiche = vm.interventions.value.first { it.id == id }
+        assertEquals("7654321", fiche.value(K.NUMERO_COMMANDE))
+        assertEquals("Bon de commande Manuloc", fiche.recognized)
 
         // PDF final
-        val id = (vm.backStack.last() as Screen.Fps).id
         var done = false
         CoroutineScope(Dispatchers.Main).launch {
             assertNotNull(vm.generate(id))
@@ -325,15 +341,31 @@ class UiFlowTest {
     }
 
     @Test
-    @Config(qualifiers = "w1280dp-h800dp-land-night-mdpi")
-    fun modeSombre() {
+    fun bonDeCommandeImporte_documentASigner() {
+        // L'import ne crée jamais de fiche d'intervention
         val vm = newVm()
         configure(vm)
         val app = ApplicationProvider.getApplicationContext<Application>()
         val src = File(app.cacheDir, "Bon de commande 7654321.pdf").also { FakeDocs.manuloc(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
         vm.importClient(Uri.fromFile(src))
-        waitFor { vm.backStack.last() is Screen.Fps }
+        waitFor { vm.backStack.last() is Screen.Document }
+        val i = vm.interventions.value.first { it.id == (vm.backStack.last() as Screen.Document).id }
+        assertEquals(InterventionType.DOCUMENT, i.type)
+        assertEquals(listOf("Signature du client"), Completion.missing(i).map { it.label })
+        // Ses informations nomment le fichier
+        assertEquals("7654321", i.value(DocKeys.REFERENCE))
+        idle(200)
+        snap("10b-bon-de-commande-importe")
+    }
+
+    @Test
+    @Config(qualifiers = "w1280dp-h800dp-land-night-mdpi")
+    fun modeSombre() {
+        val vm = newVm()
+        configure(vm)
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        ficheAvecBonDeCommande(vm)
         idle()
         snap("14-mode-sombre-fiche")
         vm.back()
@@ -346,11 +378,8 @@ class UiFlowTest {
     fun petiteTablette() {
         val vm = newVm()
         configure(vm)
-        val app = ApplicationProvider.getApplicationContext<Application>()
-        val src = File(app.cacheDir, "Bon de commande 7654321.pdf").also { FakeDocs.manuloc(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
-        vm.importClient(Uri.fromFile(src))
-        waitFor { vm.backStack.last() is Screen.Fps }
+        ficheAvecBonDeCommande(vm)
         idle()
         snap("16-petite-tablette-fiche")
         vm.back()
@@ -359,18 +388,19 @@ class UiFlowTest {
     }
 
     @Test
-    fun documentInconnu_choix() {
+    fun documentInconnu_aSigner() {
         val vm = newVm()
         configure(vm)
         val app = ApplicationProvider.getApplicationContext<Application>()
         val src = File(app.cacheDir, "Devis.pdf").also { FakeDocs.other(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
         vm.importClient(Uri.fromFile(src))
-        waitFor { vm.pendingImport.value != null }
-        idle()
-        snap("12-document-non-reconnu")
-        // La raison est affichée
-        compose.onNodeWithText("pas un modèle connu", substring = true).assertExists()
+        // Pas de question : un document importé qui n'est pas une feuille Mastra est à signer
+        waitFor { vm.backStack.last() is Screen.Document }
+        val i = vm.interventions.value.first { it.id == (vm.backStack.last() as Screen.Document).id }
+        assertEquals(null, i.template)
+        idle(100)
+        snap("12-document-a-signer")
     }
 
     @Test
@@ -381,8 +411,6 @@ class UiFlowTest {
         val src = File(app.cacheDir, "Bon de livraison 0042.pdf").also { FakeDocs.other(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
         vm.importClient(Uri.fromFile(src))
-        waitFor { vm.pendingImport.value != null }
-        compose.onNodeWithText("Écrire directement sur ce document").performClick()
         waitFor { vm.backStack.last() is Screen.Document }
         val id = (vm.backStack.last() as Screen.Document).id
         idle(200)
@@ -480,5 +508,79 @@ class UiFlowTest {
         idle(4)
         compose.onNodeWithText("2 bons incomplets sur 2").assertExists()
         snap("13b-envoi-groupe-incomplet")
+    }
+
+    @Test
+    fun envoiIncomplet_marqueACorriger() {
+        val vm = newVm()
+        configure(vm)
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val src = File(app.cacheDir, "Bon de livraison 0042.pdf").also { FakeDocs.other(it) }
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        vm.importClient(Uri.fromFile(src))
+        waitFor { vm.backStack.last() is Screen.Document }
+        val id = (vm.backStack.last() as Screen.Document).id
+        idle(40)
+        // Pas signé : l'envoi reste possible, mais le technicien est prévenu
+        compose.onNodeWithText("Envoyer à la compta").performClick()
+        idle(4)
+        compose.onNodeWithText("le bon sera marqué « Envoyé incomplet »", substring = true).assertExists()
+        snap("19-envoi-sans-signature")
+        compose.onNodeWithText("Envoyer quand même").performClick()
+        waitFor { vm.interventions.value.first { it.id == id }.sentAt != null }
+        val sent = vm.interventions.value.first { it.id == id }
+        assertEquals(listOf("Signature du client"), sent.sentMissing)
+        assertEquals(DisplayStatus.INCOMPLET, sent.displayStatus())
+        idle(10)
+        // Marqué dans le bon…
+        compose.onNodeWithText("Envoyé incomplet le", substring = true).assertExists()
+        snap("19b-envoye-incomplet-bon")
+        // … et dans la liste, avec ce qui manquait
+        vm.back()
+        idle(10)
+        compose.onNodeWithText("à compléter puis renvoyer", substring = true).assertExists()
+        snap("19c-envoye-incomplet-liste")
+        // Signé ensuite : il reste à le renvoyer
+        vm.update(id) {
+            it.copy(overlays = it.overlays + Overlay("s", OverlayKind.SIGNATURE, 380f, 700f, width = 150f, height = 61f, signature = signature()))
+        }
+        vm.openIntervention(vm.interventions.value.first { it.id == id })
+        idle(20)
+        compose.onNodeWithText("Complété depuis l'envoi incomplet", substring = true).assertExists()
+        snap("19d-complete-a-renvoyer")
+    }
+
+    @Test
+    fun pleinEcran_feuilleMastra() {
+        val vm = newVm()
+        configure(vm)
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val src = File(app.cacheDir, "Feuille de tache 1234567.pdf").also { FakeDocs.interfit(it) }
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        vm.importClient(Uri.fromFile(src))
+        waitFor { vm.backStack.last() is Screen.Document }
+        val id = (vm.backStack.last() as Screen.Document).id
+        idle(200)
+        compose.onNodeWithContentDescription("Plein écran").performClick()
+        idle(100)
+        // Toute la place pour la page ; ce qui manque reste affiché en bas
+        compose.onNodeWithText("À compléter avant l'envoi").assertDoesNotExist()
+        compose.onNodeWithText("Manque : Lecture du compteur", substring = true).assertExists()
+        snap("20-plein-ecran")
+        // Un appui ouvre la première case à remplir, sans quitter la page
+        compose.onNodeWithText("Manque : Lecture du compteur", substring = true).performClick()
+        idle(4)
+        snap("20b-plein-ecran-saisie")
+        compose.onNode(hasSetTextAction()).performTextInput("4559")
+        compose.onNodeWithText("OK").performClick()
+        idle(10)
+        assertEquals("4559", vm.interventions.value.first { it.id == id }.value("if.compteur"))
+        // Toute la largeur de la page, pour écrire plus facilement
+        compose.onNodeWithContentDescription("Largeur de la page").performClick()
+        idle(40)
+        snap("20c-plein-ecran-largeur")
+        compose.onNodeWithContentDescription("Quitter le plein écran").performClick()
+        idle(10)
+        compose.onNodeWithText("À compléter avant l'envoi").assertExists()
     }
 }

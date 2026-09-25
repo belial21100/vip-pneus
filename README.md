@@ -6,33 +6,40 @@ les bons restent enregistrés sur la tablette.
 
 ## Principe
 
-Le client envoie un PDF d'une page. Au lieu d'ajouter chaque champ à la main dans Adobe,
-on **importe le PDF dans l'application** : elle lit les informations du document et
-**remplit automatiquement** la fiche d'inter. Le technicien n'a plus qu'à vérifier et
-compléter ce qui se constate sur place (horamètre, serrage, remarques, signature).
+Trois sortes de bons :
 
-Deux traitements :
+- **Fiche d'intervention** (Mac2, Conti…) : la fiche presse mobile FPS, créée avec
+  **Nouvelle fiche d'intervention**. On y joint le bon de commande du client : ses
+  informations **remplissent automatiquement** la fiche, et il la suit dans le PDF.
+  PDF envoyé = la fiche, puis le bon de commande.
+- **Feuille de tâche Mastra** : le document du client est lui-même la fiche. On
+  l'**importe** et le technicien écrit directement dans ses cases ; PDF envoyé = page 1
+  le document rempli, page 2 le document d'origine.
+- **Document à signer** (bon de livraison…) : tout autre document importé. Seule la
+  signature du client est exigée ; on peut aussi y écrire librement.
 
-- **Mac2, Conti…** : la fiche d'intervention FPS est créée et pré-remplie ;
-  PDF envoyé = la fiche, puis le document du client.
-- **Mastra** : pas de fiche FPS, le technicien écrit directement sur le document du
-  client ; PDF envoyé = page 1 le document rempli, page 2 le document d'origine.
+**L'import ne crée jamais de fiche d'intervention** : un document importé est une feuille
+Mastra à remplir ou un document à signer. Un bon de commande importé seul est traité comme
+un document à signer (ses informations servent au nom du fichier) ; pour la fiche
+d'intervention, on le joint à une nouvelle fiche.
 
 ### Documents reconnus automatiquement
 
 | Document client | Ce que fait l'application |
 |---|---|
-| **Bon de commande Manuloc** | Fiche presse mobile FPS pré-remplie : n° de commande, client mandataire (adresse de facturation), client utilisateur (adresse de livraison), n° de série et type d'engin, pneus AV/AR (dimensions, marque, profil, type, quantité) et quantités de prestations par taille de jante. Le bon de commande est joint après la fiche. |
-| **Mobile Service Continental** (Conti360°) | Fiche FPS pré-remplie : n° Mobile Service, rendez-vous, site (localisation), modèle, immatriculation, n° de flotte, pneus montés et prestations. Document joint après la fiche. |
-| **Feuille de tâche Mastra** (Interfit) | Écriture directe sur le document, seulement dans les cases que remplit le technicien : lecture du compteur, couple de serrage, monteur, date, « Reçu par » et signature, aux emplacements et tailles qu'il utilise (couple préconisé et horamètre de la demande affichés en aide). Le client final (lieu réel de l'intervention s'il diffère de « Livrer à ») s'écrit dans un encart au-dessus de « Commentaires ». Toute autre mention : texte libre posé sur la page. Page 2 : le document d'origine. Si le PDF reçu a plusieurs pages (page 1 scannée ou déjà traitée), la feuille est cherchée dans les pages suivantes et seule sa page est gardée. |
-| Autre document (bon de livraison…) | L'application explique pourquoi il n'est pas reconnu (pas de texte lisible, modèle inconnu), puis au choix : fiche FPS avec le document joint, ou écriture libre sur le document. En écriture libre, **seule la signature du client est exigée** : aucun champ n'est imposé. |
+| **Bon de commande Manuloc** (joint à une fiche) | Fiche pré-remplie : n° de commande, client mandataire (adresse de facturation), client utilisateur (adresse de livraison), n° de série et type d'engin, pneus AV/AR (dimensions, marque, profil, type, quantité) et quantités de prestations par taille de jante. |
+| **Mobile Service Continental** (Conti360°, joint à une fiche) | Fiche pré-remplie : n° Mobile Service, rendez-vous, site (localisation), modèle, immatriculation, n° de flotte, pneus montés et prestations. |
+| **Feuille de tâche Mastra** (Interfit, importée) | Écriture directe sur le document, seulement dans les cases que remplit le technicien : lecture du compteur, couple de serrage, monteur, date, « Reçu par » et signature, aux emplacements et tailles qu'il utilise (couple préconisé et horamètre de la demande affichés en aide). Le client final (lieu réel de l'intervention s'il diffère de « Livrer à ») s'écrit dans un encart au-dessus de « Commentaires ». Toute autre mention : texte libre posé sur la page. Page 2 : le document d'origine. Si le PDF reçu a plusieurs pages (page 1 scannée ou déjà traitée), la feuille est cherchée dans les pages suivantes et seule sa page est gardée. |
+| Autre document importé (bon de livraison…) | Document à signer : **seule la signature du client est exigée**, aucun champ n'est imposé. Sans texte lisible (photo, scan), un message le signale. |
 
 Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office.
 
 ### Sur la tablette
 
-1. **Importer un PDF client** (bouton jaune de l'accueil, ou « Ouvrir avec / Partager →
-   VIP Pneus » depuis la messagerie), ou **Nouvelle fiche vierge**.
+1. **Importer un document** (bouton jaune de l'accueil, ou « Ouvrir avec / Partager →
+   VIP Pneus » depuis la messagerie) pour une feuille Mastra ou un document à signer ;
+   ou **Nouvelle fiche d'intervention** pour Mac2 et Conti, puis **Joindre** le bon de
+   commande (en tête de la fiche).
 2. Les champs lus dans le document sont surlignés en jaune (✦) : les vérifier. Le cadre
    **À compléter** nomme chaque élément qui manque encore (horamètre, serrage, signature…)
    avec ce qu'il faut faire ; un appui mène directement au champ. Les champs attendus
@@ -40,13 +47,19 @@ Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office
    « Complet ». Ce qui manque est aussi rappelé dans la barre d'envoi, sur la liste des bons
    et au-dessus de l'aperçu du PDF. L'aperçu de la page se met à jour en direct.
 3. **Faire signer** le client au doigt ou au stylet (son nom se saisit dans la même fenêtre).
-4. Au besoin, **Ajuster** : déplacer un texte, changer sa taille, ajouter une mention,
-   une date, une croix ou une signature n'importe où sur la page (pincer pour zoomer).
+4. Au besoin, écrire sur la page (ou **Ajuster** la fiche) : déplacer un texte, changer sa
+   taille, ajouter une mention, une date, une croix ou une signature (pincer pour zoomer).
+   Le bouton **plein écran** de la palette donne toute la tablette à la page, et le bouton
+   **largeur** l'agrandit à la largeur de l'écran. Sur une feuille Mastra, les cases vides
+   sont repérées en jaune sur la page : un appui les remplit ; en plein écran, « Manque : … »
+   en bas ouvre directement la case suivante.
 5. **Envoyer à la compta** (barre du bas, avec le nom du fichier) : s'il manque quelque
    chose, l'application dit précisément quoi avant l'envoi (y compris depuis la liste des
-   bons, et bon par bon pour un envoi groupé) ; le PDF est créé et la messagerie s'ouvre avec
-   l'adresse de la comptabilité, l'objet et la pièce jointe. Plusieurs bons peuvent être
-   envoyés ensemble (appui long dans la liste).
+   bons, et bon par bon pour un envoi groupé). L'envoi reste possible (« Envoyer quand
+   même ») : le bon est alors marqué **Envoyé incomplet**, avec ce qui manquait, sur la
+   liste et dans le bon, jusqu'à ce qu'il soit complété et renvoyé. Le PDF est créé et la
+   messagerie s'ouvre avec l'adresse de la comptabilité, l'objet et la pièce jointe.
+   Plusieurs bons peuvent être envoyés ensemble (appui long dans la liste).
 
 Des photos (bon papier, pneus…) et d'autres PDF peuvent être ajoutés à la suite de la fiche.
 
