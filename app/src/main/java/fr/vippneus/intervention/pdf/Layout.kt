@@ -3,6 +3,7 @@ package fr.vippneus.intervention.pdf
 import fr.vippneus.intervention.data.DocTemplate
 import fr.vippneus.intervention.data.FieldAdjust
 import fr.vippneus.intervention.data.PlacedField
+import fr.vippneus.intervention.data.PlacedPanel
 import fr.vippneus.intervention.data.Overlay
 import fr.vippneus.intervention.data.OverlayKind
 import fr.vippneus.intervention.data.SignatureData
@@ -72,6 +73,16 @@ data class SignatureOp(
     val box: Box,
 ) : DrawOp {
     override val bounds: Box get() = box
+}
+
+/** Encart encadré (cadre, titre, lignes de texte), déplacé et agrandi d'un seul bloc. */
+data class PanelOp(
+    override val key: String,
+    val frame: Box,
+    val stroke: Float,
+    val texts: List<TextOp>,
+) : DrawOp {
+    override val bounds: Box get() = frame
 }
 
 object TextLayout {
@@ -241,6 +252,7 @@ object TemplateLayout {
             val text = if (f.unit.isNotEmpty() && raw.matches(Regex("[0-9 .,]+"))) "$raw ${f.unit}" else raw
             ops += TextLayout.layoutField(f.toField(), text, adjust[f.key], m)
         }
+        t.panel?.let { p -> PanelLayout.build(p, values, adjust[p.key], m)?.let { ops += it } }
         val box = t.signature
         if (box != null && signature != null && !signature.isEmpty) {
             ops += SignatureOp(
@@ -249,6 +261,50 @@ object TemplateLayout {
             )
         }
         return ops
+    }
+}
+
+/**
+ * Mise en page d'un encart : titre discret puis les valeurs saisies (réduites si besoin),
+ * cadre ajusté au contenu et posé sur son bord bas ; l'échelle d'ajustement agrandit le tout.
+ */
+object PanelLayout {
+    const val TITLE_SIZE = 7.8f
+
+    fun build(p: PlacedPanel, values: Map<String, String>, adj: FieldAdjust?, m: TextMeasure): PanelOp? {
+        val filled = p.lines.mapNotNull { l -> values[l.key]?.trim()?.takeIf { it.isNotEmpty() }?.let { l to it } }
+        if (filled.isEmpty()) return null
+        val s = adj?.scale ?: 1f
+        val left = p.left + (adj?.dx ?: 0f)
+        val width = (p.right - p.left) * s
+        val pad = 5f * s
+        val innerW = width - 2 * pad
+
+        // Positions depuis le haut du cadre (lignes, corps, 1re ligne de base)
+        val blocks = mutableListOf<Triple<List<String>, Float, Float>>()
+        val titleSize = TITLE_SIZE * s
+        var y = pad + titleSize * Typo.ASCENT
+        blocks += Triple(listOf(p.title), titleSize, y)
+        y += titleSize * Typo.DESCENT + 2f * s
+        for ((l, text) in filled) {
+            var size = l.fontSize * s
+            val minSize = l.minFontSize * s
+            var lines = TextLayout.wrap(text, innerW, size, m)
+            while (size > minSize && (lines.size > l.maxLines || lines.any { m.width(it, size) > innerW + 0.01f })) {
+                size = max(minSize, size - 0.5f)
+                lines = TextLayout.wrap(text, innerW, size, m)
+            }
+            val first = y + size * Typo.ASCENT
+            blocks += Triple(lines, size, first)
+            y = first + (lines.size - 1) * size * Typo.LINE + size * Typo.DESCENT + 1.5f * s
+        }
+        val height = y - 1.5f * s + pad
+        val bottom = p.bottom + (adj?.dy ?: 0f)
+        val top = bottom - height
+        val texts = blocks.mapIndexed { i, (lines, size, base) ->
+            TextLayout.textOp("${p.key}#$i", lines, { _, _ -> left + pad }, top + base, size, m)
+        }
+        return PanelOp(p.key, Box(left, top, left + width, bottom), max(0.5f, 0.7f * s), texts)
     }
 }
 

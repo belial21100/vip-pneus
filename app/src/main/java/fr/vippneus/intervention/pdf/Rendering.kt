@@ -64,6 +64,11 @@ class CanvasRenderer(typeface: Typeface) {
         strokeJoin = Paint.Join.ROUND
         color = Ink.ARGB
     }
+    private val framePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeJoin = Paint.Join.MITER
+        color = Ink.ARGB
+    }
     private val path = Path()
 
     /** [scale] : pixels par point PDF. */
@@ -84,6 +89,12 @@ class CanvasRenderer(typeface: Typeface) {
                     val b = (op.cy + op.half) * scale
                     canvas.drawLine(l, t, r, b, strokePaint)
                     canvas.drawLine(l, b, r, t, strokePaint)
+                }
+                is PanelOp -> {
+                    framePaint.strokeWidth = op.stroke * scale
+                    val f = op.frame
+                    canvas.drawRect(f.left * scale, f.top * scale, f.right * scale, f.bottom * scale, framePaint)
+                    draw(canvas, op.texts, scale)
                 }
                 is SignatureOp -> {
                     val fit = op.signature.fitInto(op.box)

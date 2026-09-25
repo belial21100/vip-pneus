@@ -211,9 +211,20 @@ class UiFlowTest {
         // Laisse le temps au rendu de la page 1 (rendu PDFBox, plus lent, sous Robolectric)
         idle(200)
         snap("09-document-client")
-        vm.update(id) { it.copy(values = it.values + mapOf("if.compteur" to "4559", "if.couple" to "180", "if.recuPar" to "M. Martin"), signature = signature()) }
+        vm.update(id) {
+            it.copy(
+                values = it.values + mapOf(
+                    "if.compteur" to "4559", "if.couple" to "180", "if.recuPar" to "M. Martin",
+                    "if.clientFinal.nom" to "Esat Test", "if.clientFinal.adresse" to "3 allée des Essais",
+                ),
+                signature = signature(),
+            )
+        }
         idle(40)
         snap("09b-document-client-rempli")
+        compose.onNode(hasText("Nom du client final") and hasSetTextAction()).performScrollTo()
+        idle(4)
+        snap("09c-document-client-final")
     }
 
     @Test

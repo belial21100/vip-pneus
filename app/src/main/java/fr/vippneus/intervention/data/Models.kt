@@ -88,6 +88,30 @@ data class PlacedField(
 @Serializable
 data class PlacedBox(val left: Float, val top: Float, val right: Float, val bottom: Float)
 
+/** Ligne d'un encart : une valeur saisie, écrite sur une ou plusieurs lignes. */
+@Serializable
+data class PanelLine(
+    val key: String,
+    val label: String,
+    val fontSize: Float,
+    val minFontSize: Float = 7f,
+    val maxLines: Int = 1,
+)
+
+/**
+ * Encart encadré écrit sur la page (ex. client final au-dessus de « Commentaires »).
+ * Sa hauteur suit le contenu ; il est posé sur [bottom], entre [left] et [right].
+ */
+@Serializable
+data class PlacedPanel(
+    val key: String,
+    val title: String,
+    val left: Float,
+    val right: Float,
+    val bottom: Float,
+    val lines: List<PanelLine>,
+)
+
 /** Modèle de remplissage d'un document client reconnu (ex. feuille de tâche Interfit). */
 @Serializable
 data class DocTemplate(
@@ -95,6 +119,7 @@ data class DocTemplate(
     val name: String,
     val fields: List<PlacedField>,
     val signature: PlacedBox? = null,
+    val panel: PlacedPanel? = null,
 )
 
 /** PDF client dont on complète la 1re page (mode DOCUMENT). */

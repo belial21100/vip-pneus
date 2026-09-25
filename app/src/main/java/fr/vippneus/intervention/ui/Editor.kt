@@ -83,6 +83,7 @@ import fr.vippneus.intervention.data.SignatureData
 import fr.vippneus.intervention.pdf.CrossOp
 import fr.vippneus.intervention.pdf.DrawOp
 import fr.vippneus.intervention.pdf.FpsTemplate
+import fr.vippneus.intervention.pdf.PanelOp
 import fr.vippneus.intervention.pdf.SignatureOp
 import fr.vippneus.intervention.pdf.TextOp
 import fr.vippneus.intervention.pdf.Typo
@@ -453,6 +454,9 @@ fun PageEditor(
                         edit { it.copy(overlays = it.overlays.filterNot { o -> o.id == key }) }
                     } else if (key == FpsTemplate.K.SIGNATURE) {
                         edit { it.copy(signature = null, adjust = it.adjust - key) }
+                    } else if (key == intervention.template?.panel?.key) {
+                        val lines = intervention.template.panel.lines.map { l -> l.key }.toSet()
+                        edit { it.copy(values = it.values - lines, adjust = it.adjust - key) }
                     } else {
                         edit { it.copy(values = it.values - key, adjust = it.adjust - key) }
                     }
@@ -626,7 +630,7 @@ private fun SelectionBar(
                         )
                         VipButton("Modifier le texte", onEditText, icon = Icons.Filled.Edit, tone = Tone.GHOST, compact = true)
                     }
-                    is CrossOp, is SignatureOp -> {
+                    is CrossOp, is SignatureOp, is PanelOp -> {
                         Stepper(
                             text = "Taille",
                             onMinus = { onScale(1f / 1.15f) },

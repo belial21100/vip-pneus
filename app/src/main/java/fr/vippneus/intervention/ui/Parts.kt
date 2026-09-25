@@ -276,6 +276,7 @@ fun SignatureCard(
     modifier: Modifier = Modifier,
     namePlaceholder: String? = null,
     focus: FocusRequester? = null,
+    suggestions: List<String> = emptyList(),
 ) {
     SectionCard(
         "Signature du client",
@@ -289,6 +290,7 @@ fun SignatureCard(
                 value = i.value(nameKey),
                 onValueChange = { vm.setValue(i.id, nameKey, it) },
                 auto = i.isAuto(nameKey),
+                suggestions = suggestions,
                 singleLine = i.type != InterventionType.FPS,
                 placeholder = namePlaceholder,
                 capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Words,

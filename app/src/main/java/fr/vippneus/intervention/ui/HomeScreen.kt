@@ -711,8 +711,11 @@ private fun InterventionCard(
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(Naming.title(i), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        val clientFinal = i.template?.panel?.lines?.firstOrNull()?.let { i.value(it.key).trim() }.orEmpty()
                         Text(
-                            if (i.type == InterventionType.FPS) Naming.typeLabel(i.type) else i.recognized ?: Naming.typeLabel(i.type),
+                            if (i.type == InterventionType.FPS) Naming.typeLabel(i.type)
+                            else listOfNotNull(i.recognized ?: Naming.typeLabel(i.type), clientFinal.ifEmpty { null }?.let { "chez $it" })
+                                .joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                             color = c.muted,
                             maxLines = 1,

@@ -12,6 +12,8 @@ object Suggestions {
         K.CLIENT_UTILISATEUR, K.UTILISATEUR_ADRESSE, K.UTILISATEUR_CP,
         K.MARQUE, K.TYPE, K.SERRAGE_AV, K.SERRAGE_AR, K.SERRAGE_AV_REMARQUE, K.SERRAGE_AR_REMARQUE,
         DocKeys.CLIENT, DocKeys.SITE, DocKeys.CP, DocKeys.VILLE,
+        // Feuille de tâche Mastra : personne qui signe, client final
+        "if.recuPar",
     )
 
     /** Regroupe les champs équivalents (pneus AV/AR, serrages...). */
@@ -23,6 +25,8 @@ object Suggestions {
         key == K.CLIENT_MANDATAIRE || key == DocKeys.CLIENT -> "client"
         key == K.CLIENT_UTILISATEUR || key == DocKeys.SITE -> "site"
         key == K.UTILISATEUR_CP || key == K.MANDATAIRE_CP || key == DocKeys.CP -> "cp"
+        key == "if.clientFinal.nom" || key == "if.lieu" -> "clientFinal"
+        key == "if.clientFinal.adresse" || key == "if.lieuAdresse" -> "clientFinal.adresse"
         key in keys -> key
         else -> null
     }

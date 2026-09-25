@@ -2,7 +2,9 @@ package fr.vippneus.intervention.importer
 
 import fr.vippneus.intervention.data.DocKeys
 import fr.vippneus.intervention.data.DocTemplate
+import fr.vippneus.intervention.data.PanelLine
 import fr.vippneus.intervention.data.PlacedBox
+import fr.vippneus.intervention.data.PlacedPanel
 import fr.vippneus.intervention.data.PlacedField
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import java.util.Locale
@@ -292,12 +294,8 @@ object ClientDocs {
             val p = 0
             val lecture = t.label("Lecture du compteur", page = p) ?: return null
             val monteur = t.label("Monteur", page = p, exact = true)
-            val arrivee = t.label("Heure d'arrivée", page = p)
-            val depart = t.label("Heure de départ", page = p)
-            val terminee = t.label("Date terminée", page = p)
-            val duree = t.label("Durée", page = p, exact = true)
             val couple = t.label("Couple de serrage", page = p)
-            val instructions = t.label("Instructions spéciales", page = p)
+            val commentaires = t.label("Commentaires", page = p, exact = true)
             val date = t.pageRuns(p).filter { it.norm == "date" }.maxByOrNull { it.baseline }
             val recu = t.label("Reçu par", page = p)
 
@@ -314,7 +312,7 @@ object ClientDocs {
             val torque = t.lines(p).firstNotNullOfOrNull { Regex("""=\s*(\d+)\s*Nm\s*\(\+/-\s*(\d+)""").find(it) }
             val hour = t.lines(p).firstNotNullOfOrNull { Regex("""(?i)Horam[eè]tre\s*:?\s*(\d+)\s*h""").find(it) }
 
-            // Ordre de saisie : d'abord ce que le technicien relève sur place
+            // Seulement les cases que le technicien remplit (heures, durée... : texte libre au besoin)
             val fields = listOfNotNull(
                 f(
                     lecture, "compteur", "Lecture du compteur (h)", 114f, -10.6f, 202f, 9.2f, 17f,
@@ -328,16 +326,26 @@ object ClientDocs {
                 ),
                 f(monteur, "monteur", "Monteur", 91.7f, -11.6f, 188.7f, 8.2f, 17f, required = true),
                 f(date, "date", "Date", 48f, -5.7f, 228f, 12.5f, 20f, required = true),
-                f(arrivee, "heureArrivee", "Heure d'arrivée", 114f, -12.2f, 202f, 8.2f, 14f),
-                f(depart, "heureDepart", "Heure de départ", 91.7f, -12.2f, 188.7f, 8.2f, 14f),
-                f(terminee, "dateTerminee", "Date terminée", 114f, -11.9f, 202f, 10.2f, 14f),
-                f(duree, "duree", "Durée", 91.7f, -11.3f, 188.7f, 10.8f, 14f),
-                f(instructions, "lieu", "Lieu d'intervention (si différent)", 126f, -2.2f, 318f, 20f, 24f),
-                f(instructions, "lieuAdresse", "Adresse du lieu d'intervention", 122f, 38.8f, 418f, 53.2f, 13f),
                 f(recu, "recuPar", "Reçu par (nom du client)", 90f, 12f, 240f, 26f, 15f, required = true),
             )
             val signature = recu?.let { PlacedBox(it.x0 + 240f, it.baseline - 23f, it.x0 + 348f, it.baseline + 21f) }
-            val template = DocTemplate("interfit", "Feuille de tâche Mastra", fields, signature)
+            // Client final (site réel de l'intervention) : encart dans la case au-dessus de « Commentaires »,
+            // aligné sur la colonne « Commentaires », posé juste au-dessus du trait
+            val anchor = when {
+                commentaires != null -> commentaires.x0 - 4.7f to commentaires.baseline - 24f
+                couple != null -> couple.x0 + 75f to couple.baseline + 116f
+                else -> null
+            }
+            val panel = anchor?.let { (left, bottom) ->
+                PlacedPanel(
+                    PREFIX + "clientFinal", "Client final", left, left + 138f, bottom,
+                    listOf(
+                        PanelLine(PREFIX + "clientFinal.nom", "Nom du client final", 16f, minFontSize = 9f, maxLines = 2),
+                        PanelLine(PREFIX + "clientFinal.adresse", "Adresse", 11f, minFontSize = 7f, maxLines = 2),
+                    ),
+                )
+            }
+            val template = DocTemplate("interfit", "Feuille de tâche Mastra", fields, signature, panel)
 
             val values = mutableMapOf<String, String>()
             if (technicien.isNotBlank() && monteur != null) values[PREFIX + "monteur"] = technicien.trim()

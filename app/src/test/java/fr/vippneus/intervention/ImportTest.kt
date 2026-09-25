@@ -92,14 +92,18 @@ class ImportTest {
     fun feuilleDeTacheInterfit_champsPlacesAutomatiquement() {
         val f = File(out, "interfit.pdf").also { FakeDocs.interfit(it) }
         val plan = analyze(f) as ImportPlan.Feuille
-        val keys = plan.template.fields.map { it.key }
-        assertTrue(keys.containsAll(listOf("if.compteur", "if.monteur", "if.date", "if.recuPar", "if.couple", "if.lieu")))
-        assertNotNull(plan.template.signature)
-        // À remplir avant l'envoi (liste « À compléter »)
+        // Seulement les cases que remplit le technicien (le reste : texte libre sur la page)
         assertEquals(
-            setOf("if.compteur", "if.couple", "if.monteur", "if.date", "if.recuPar"),
-            plan.template.fields.filter { it.required }.map { it.key }.toSet(),
+            listOf("if.compteur", "if.couple", "if.monteur", "if.date", "if.recuPar"),
+            plan.template.fields.map { it.key },
         )
+        assertTrue(plan.template.fields.all { it.required })
+        assertNotNull(plan.template.signature)
+        // Client final : encart aligné sur la colonne « Commentaires », juste au-dessus du trait
+        val panel = plan.template.panel!!
+        assertEquals(listOf("if.clientFinal.nom", "if.clientFinal.adresse"), panel.lines.map { it.key })
+        assertEquals(422.1f, panel.left, 0.5f)
+        assertEquals(426.2f, panel.bottom, 0.5f)
         val compteur = plan.template.fields.first { it.key == "if.compteur" }
         assertEquals(136f, compteur.left, 2f) // cellule à droite de « Lecture du compteur »
         assertEquals("Chris.E", plan.values["if.monteur"])
@@ -117,7 +121,10 @@ class ImportTest {
         val info = PdfPages.info(f)
         val i = Intervention(
             "t", InterventionType.DOCUMENT, 0L,
-            values = plan.values + mapOf("if.compteur" to "4559", "if.couple" to "180", "if.recuPar" to "M. Martin"),
+            values = plan.values + mapOf(
+                "if.compteur" to "4559", "if.couple" to "180", "if.recuPar" to "M. Martin",
+                "if.clientFinal.nom" to "ESAT TEST", "if.clientFinal.adresse" to "3 allée des Essais",
+            ),
             template = plan.template,
             source = SourceDoc("source.pdf", "interfit.pdf", info.pageCount, info.width, info.height),
         )
@@ -133,6 +140,12 @@ class ImportTest {
         assertTrue(compteurRun.x0 in 130f..145f && compteurRun.baseline in 478f..492f)
         assertNotNull(text.runs.firstOrNull { it.text == "180 Nm" })
         assertNotNull(text.runs.firstOrNull { it.text == "Chris.E" })
+        // Encart « Client final » dans la case au-dessus de « Commentaires »
+        val titre = text.runs.first { it.page == 0 && it.text == "Client final" }
+        val nom = text.runs.first { it.page == 0 && it.text == "ESAT TEST" }
+        val adresse = text.runs.first { it.page == 0 && it.text == "3 allée des Essais" }
+        assertEquals(427.1f, nom.x0, 1f)
+        assertTrue(titre.baseline < nom.baseline && nom.baseline < adresse.baseline && adresse.baseline < 426f)
     }
 
     @Test

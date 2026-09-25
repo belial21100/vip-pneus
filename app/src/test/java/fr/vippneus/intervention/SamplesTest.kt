@@ -71,7 +71,7 @@ class SamplesTest {
                         // Valeurs de démonstration pour voir le placement
                         val demo = plan.values + mapOf(
                             "if.compteur" to "4559", "if.couple" to "180", "if.recuPar" to "M. Martin",
-                            "if.lieu" to "Site de démonstration", "if.lieuAdresse" to "1 rue de l'Exemple",
+                            "if.clientFinal.nom" to "Site de démonstration", "if.clientFinal.adresse" to "1 rue de l'Exemple",
                         )
                         Intervention(
                             "s$index", InterventionType.DOCUMENT, 0L, values = demo, template = plan.template,

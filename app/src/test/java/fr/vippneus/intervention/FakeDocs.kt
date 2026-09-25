@@ -140,6 +140,8 @@ object FakeDocs {
         t(22f, 375.1f, 7.8f, "Front Left = 159 Nm (+/- 39 Nm)")
         t(347.2f, 303.4f, 7.8f, "Couple de serrage")
         t(23.2f, 444.0f, 7.8f, "Emplacement de la franchise")
+        t(231.3f, 444.0f, 7.8f, "Date prévue")
+        t(426.8f, 444.0f, 7.8f, "Commentaires")
         t(22f, 475.3f, 7.8f, "Lecture du compteur")
         t(231.3f, 476.3f, 7.8f, "Monteur")
         t(22f, 496.7f, 7.8f, "Heure d'arrivée (hh:mm)")

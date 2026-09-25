@@ -30,6 +30,7 @@ object PageOps {
     fun fieldLabel(i: Intervention, key: String): String? =
         FpsTemplate.fieldsByKey[key]?.label
             ?: i.template?.fields?.firstOrNull { it.key == key }?.label
+            ?: i.template?.panel?.takeIf { it.key == key }?.title
             ?: FpsTemplate.choices.firstOrNull { it.key == key }?.label
 
     fun pageSize(i: Intervention): Pair<Float, Float> = when (i.type) {
@@ -224,6 +225,17 @@ class PdfExporter(private val context: Context) {
                     cs.moveTo(map.x(l, b), map.y(l, b))
                     cs.lineTo(map.x(r, t), map.y(r, t))
                     cs.stroke()
+                }
+                is PanelOp -> {
+                    val f = op.frame
+                    cs.setLineWidth(op.stroke)
+                    cs.setLineJoinStyle(0)
+                    cs.moveTo(map.x(f.left, f.top), map.y(f.left, f.top))
+                    cs.lineTo(map.x(f.right, f.top), map.y(f.right, f.top))
+                    cs.lineTo(map.x(f.right, f.bottom), map.y(f.right, f.bottom))
+                    cs.lineTo(map.x(f.left, f.bottom), map.y(f.left, f.bottom))
+                    cs.closeAndStroke()
+                    drawOps(cs, op.texts, map, font)
                 }
                 is SignatureOp -> {
                     val fit = op.signature.fitInto(op.box)

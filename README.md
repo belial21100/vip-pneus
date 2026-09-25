@@ -24,7 +24,7 @@ Deux traitements :
 |---|---|
 | **Bon de commande Manuloc** | Fiche presse mobile FPS pré-remplie : n° de commande, client mandataire (adresse de facturation), client utilisateur (adresse de livraison), n° de série et type d'engin, pneus AV/AR (dimensions, marque, profil, type, quantité) et quantités de prestations par taille de jante. Le bon de commande est joint après la fiche. |
 | **Mobile Service Continental** (Conti360°) | Fiche FPS pré-remplie : n° Mobile Service, rendez-vous, site (localisation), modèle, immatriculation, n° de flotte, pneus montés et prestations. Document joint après la fiche. |
-| **Feuille de tâche Mastra** (Interfit) | Écriture directe sur le document : lecture du compteur, monteur, heures, date, « Reçu par », couple de serrage, lieu d'intervention et signature sont placés automatiquement aux emplacements et tailles utilisés par les techniciens (couple préconisé et horamètre de la demande affichés en aide). Page 2 : le document d'origine. |
+| **Feuille de tâche Mastra** (Interfit) | Écriture directe sur le document, seulement dans les cases que remplit le technicien : lecture du compteur, couple de serrage, monteur, date, « Reçu par » et signature, aux emplacements et tailles qu'il utilise (couple préconisé et horamètre de la demande affichés en aide). Le client final (lieu réel de l'intervention s'il diffère de « Livrer à ») s'écrit dans un encart au-dessus de « Commentaires ». Toute autre mention : texte libre posé sur la page. Page 2 : le document d'origine. |
 | Autre document | Au choix : fiche FPS avec le document joint, ou écriture libre sur le document. |
 
 Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office.

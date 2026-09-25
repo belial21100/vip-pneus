@@ -16,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Storefront
 import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -236,9 +237,34 @@ private fun DocumentForm(
         if (t != null) {
             SectionCard(
                 t.name, nav.anchor("feuille"), icon = Icons.Filled.EditNote,
-                subtitle = "Chaque valeur s'inscrit à son emplacement sur la feuille",
+                subtitle = "Les cases que remplit le technicien, écrites à leur place sur la feuille",
             ) {
                 TemplateFields(vm, i, t.fields.filter { it.key != signerKey }, nav)
+                Text(
+                    "Autre chose à écrire ? Touchez « Texte » au-dessus de la page, puis l'endroit voulu.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Vip.colors.muted,
+                )
+            }
+            t.panel?.let { p ->
+                SectionCard(
+                    p.title, nav.anchor("encart"), icon = Icons.Filled.Storefront,
+                    subtitle = "Lieu réel de l'intervention s'il diffère de « Livrer à » : " +
+                        "écrit dans un encart au-dessus de « Commentaires »",
+                ) {
+                    p.lines.forEach { l ->
+                        val v = i.value(l.key)
+                        VipField(
+                            label = l.label,
+                            value = v,
+                            onValueChange = { vm.setValue(i.id, l.key, it) },
+                            auto = i.isAuto(l.key),
+                            suggestions = Suggestions.filter(suggestions, l.key, v),
+                            capitalization = KeyboardCapitalization.Words,
+                            focusRequester = nav.focus(l.key),
+                        )
+                    }
+                }
             }
             if (t.signature != null) {
                 SignatureCard(
@@ -248,6 +274,7 @@ private fun DocumentForm(
                     onSign = onSign,
                     modifier = nav.anchor("signature"),
                     focus = signerKey?.let { nav.focus(it) },
+                    suggestions = signerKey?.let { Suggestions.filter(suggestions, it, i.value(it)) }.orEmpty(),
                 )
             }
         } else {
