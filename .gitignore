@@ -1,0 +1,19 @@
+# Gradle / Android Studio
+.gradle/
+build/
+/local.properties
+/.idea/
+*.iml
+.DS_Store
+/captures
+.externalNativeBuild
+.cxx
+
+# Signature de l'application : ne jamais publier la clé ni ses mots de passe
+*.jks
+*.keystore
+keystore.properties
+
+# APK / bundles générés
+*.apk
+*.aab
