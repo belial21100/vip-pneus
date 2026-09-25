@@ -7,9 +7,8 @@ import fr.vippneus.intervention.data.DocKeys
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.SourceDoc
-import fr.vippneus.intervention.importer.ClientDocs
+import fr.vippneus.intervention.importer.ClientImport
 import fr.vippneus.intervention.importer.DocText
-import fr.vippneus.intervention.importer.FpsPageDetector
 import fr.vippneus.intervention.importer.ImportPlan
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import fr.vippneus.intervention.pdf.PdfExporter
@@ -40,12 +39,7 @@ class ImportTest {
         PDFBoxResourceLoader.init(context)
     }
 
-    private fun analyze(file: File): ImportPlan {
-        val info = PdfPages.info(file)
-        val text = PdfExporter.loadDecrypted(file).use { DocText.read(it) }
-        val fps = FpsPageDetector.isFpsForm(context, file, info.width, info.height)
-        return ClientDocs.analyze(text, fps, "Chris.E", "25/09/26")
-    }
+    private fun analyze(file: File): ImportPlan = ClientImport.analyze(file, "Chris.E", "25/09/26")
 
     @Test
     fun bonDeCommandeManuloc() {
@@ -53,7 +47,6 @@ class ImportTest {
         val plan = analyze(f)
         assertTrue(plan is ImportPlan.Fiche)
         val v = (plan as ImportPlan.Fiche).values
-        assertFalse(plan.skipFirstPage)
         assertEquals("7654321", v[K.NUMERO_COMMANDE])
         assertEquals("LOC TEST", v[K.CLIENT_MANDATAIRE])
         assertEquals("51100", v[K.MANDATAIRE_CP])
@@ -106,11 +99,11 @@ class ImportTest {
         assertEquals(136f, compteur.left, 2f) // cellule à droite de « Lecture du compteur »
         assertEquals("Chris.E", plan.values["if.monteur"])
         assertEquals("25/09/26", plan.values["if.date"])
-        assertEquals("CLIENT - TEST", plan.values[DocKeys.CLIENT])
+        assertEquals("MASTRA", plan.values[DocKeys.CLIENT])
         assertEquals("ESAT DU PARC (VILLE-TEST 54000)", plan.values[DocKeys.SITE])
         assertEquals("54000", plan.values[DocKeys.CP])
         assertEquals("VILLE-TEST", plan.values[DocKeys.VILLE])
-        assertEquals("1234567", plan.values[DocKeys.REFERENCE])
+        assertEquals("JobSheet_1234567", plan.values[DocKeys.REFERENCE])
         assertEquals("Préconisé : 159 Nm (± 39 Nm)", plan.hints["if.couple"])
 
         // Le PDF final porte les valeurs aux bons endroits
@@ -125,23 +118,16 @@ class ImportTest {
         )
         val result = File(out, "interfit-rempli.pdf")
         PdfExporter(context).export(i, work, result, "Test", "Chris.E")
+        // Page 1 : document rempli par le technicien ; page 2 : document d'origine
+        assertEquals(2, PdfPages.info(result).pageCount)
         val text = PdfExporter.loadDecrypted(result).use { DocText.read(it) }
+        assertTrue(text.pageRuns(1).none { it.text == "4559 h" })
+        assertNotNull(text.pageRuns(1).firstOrNull { it.text.startsWith("Lecture du compteur") })
         val compteurRun = text.runs.first { it.text == "4559 h" }
+        assertEquals(0, compteurRun.page)
         assertTrue(compteurRun.x0 in 130f..145f && compteurRun.baseline in 478f..492f)
         assertNotNull(text.runs.firstOrNull { it.text == "180 Nm" })
         assertNotNull(text.runs.firstOrNull { it.text == "Chris.E" })
-    }
-
-    @Test
-    fun ficheFpsEnPremierePage_reconnue() {
-        val work = File(out, "fps-work").apply { deleteRecursively(); mkdirs() }
-        val fiche = File(out, "fiche-vierge.pdf")
-        PdfExporter(context).export(Intervention("f", InterventionType.FPS, 0L), work, fiche, "Fiche", "Test")
-        val info = PdfPages.info(fiche)
-        assertTrue(FpsPageDetector.isFpsForm(context, fiche, info.width, info.height))
-        val manuloc = File(out, "manuloc2.pdf").also { FakeDocs.manuloc(it) }
-        val info2 = PdfPages.info(manuloc)
-        assertFalse(FpsPageDetector.isFpsForm(context, manuloc, info2.width, info2.height))
     }
 
     @Test

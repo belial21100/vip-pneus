@@ -22,9 +22,7 @@ import fr.vippneus.intervention.data.Settings
 import fr.vippneus.intervention.data.SettingsStore
 import fr.vippneus.intervention.data.SourceDoc
 import fr.vippneus.intervention.data.Suggestions
-import fr.vippneus.intervention.importer.ClientDocs
-import fr.vippneus.intervention.importer.DocText
-import fr.vippneus.intervention.importer.FpsPageDetector
+import fr.vippneus.intervention.importer.ClientImport
 import fr.vippneus.intervention.importer.ImportPlan
 import fr.vippneus.intervention.pdf.ExportException
 import fr.vippneus.intervention.pdf.FpsTemplate.K
@@ -264,17 +262,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         return out
     }
 
-    /** Lit le texte du PDF et reconnaît le type de document (bon de commande, feuille de tâche...). */
-    private fun analyze(pdf: File, info: PdfPages.Info): ImportPlan {
-        val s = _settings.value
-        val text = try {
-            PdfExporter.loadDecrypted(pdf).use { DocText.read(it) }
-        } catch (_: Exception) {
-            DocText(emptyList())
-        }
-        val fpsFirst = FpsPageDetector.isFpsForm(getApplication(), pdf, info.width, info.height)
-        return ClientDocs.analyze(text, fpsFirst, s.technicien, Naming.today())
-    }
+    /** Lit le texte du PDF et reconnaît le type de document (bon de commande, feuille de tâche Mastra...). */
+    private fun analyze(pdf: File): ImportPlan =
+        ClientImport.analyze(pdf, _settings.value.technicien, Naming.today())
 
     /**
      * Import d'un PDF (ou d'une photo) envoyé par un client : les informations lues dans le document
@@ -291,7 +281,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val (pdf, info, plan) = withContext(Dispatchers.IO) {
                     val pdf = copyAsPdf(id, uri, name, image)
                     val info = PdfPages.info(pdf)
-                    Triple(pdf, info, analyze(pdf, info))
+                    Triple(pdf, info, analyze(pdf))
                 }
                 applyPlan(id, pdf, name, info, plan)
             } catch (e: Exception) {
@@ -303,7 +293,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun fpsWithDocument(id: String, pdf: File, name: String, info: PdfPages.Info, values: Map<String, String>, skipFirst: Boolean, recognized: String?) =
+    private fun fpsWithDocument(id: String, pdf: File, name: String, info: PdfPages.Info, values: Map<String, String>, recognized: String?) =
         Intervention(
             id = id,
             type = InterventionType.FPS,
@@ -311,14 +301,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             values = values.filterKeys { !it.startsWith("doc.") && !it.startsWith("if.") },
             recognized = recognized,
             attachments = listOf(
-                Attachment(UUID.randomUUID().toString(), pdf.name, name, AttachmentKind.PDF, info.pageCount, skipFirstPage = skipFirst && info.pageCount > 1),
+                Attachment(UUID.randomUUID().toString(), pdf.name, name, AttachmentKind.PDF, info.pageCount),
             ),
         )
 
     private fun applyPlan(id: String, pdf: File, name: String, info: PdfPages.Info, plan: ImportPlan) {
         when (plan) {
             is ImportPlan.Fiche -> {
-                add(fpsWithDocument(id, pdf, name, info, plan.values, plan.skipFirstPage, plan.docType))
+                add(fpsWithDocument(id, pdf, name, info, plan.values, plan.docType))
                 navigate(Screen.Fps(id))
                 message("Fiche remplie automatiquement depuis « ${plan.docType} ». Vérifiez puis complétez horamètre, serrage et signature.")
             }
@@ -336,7 +326,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 )
                 navigate(Screen.Document(id))
-                message("« ${plan.docType} » reconnue : les champs saisis sont placés automatiquement sur le document.")
+                message("« ${plan.docType} » reconnue : les champs saisis s'écrivent directement sur le document ; l'original suivra en page 2.")
             }
             is ImportPlan.Inconnu -> _pendingImport.value = PendingImport(id, pdf, name, info, plan.values)
         }
@@ -350,7 +340,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         _pendingImport.value = null
         when (choice) {
             ImportChoice.FICHE -> {
-                add(fpsWithDocument(p.id, p.pdf, p.name, p.info, p.values, false, null))
+                add(fpsWithDocument(p.id, p.pdf, p.name, p.info, p.values, null))
                 navigate(Screen.Fps(p.id))
             }
             ImportChoice.DOCUMENT -> {
@@ -393,9 +383,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     val f = repo.importUri(resolver, uri, id, "pj", extension(name, image)).also { copied = it }
                     if (kind == AttachmentKind.PDF) {
                         val info = PdfPages.info(f)
-                        val plan = if (isFps) analyze(f, info) else null
-                        val skip = plan is ImportPlan.Fiche && plan.skipFirstPage && info.pageCount > 1
-                        Attachment(UUID.randomUUID().toString(), f.name, name, kind, info.pageCount, skipFirstPage = skip) to plan
+                        val plan = if (isFps) analyze(f) else null
+                        Attachment(UUID.randomUUID().toString(), f.name, name, kind, info.pageCount) to plan
                     } else {
                         Attachment(UUID.randomUUID().toString(), f.name, name, kind, 1) to null
                     }

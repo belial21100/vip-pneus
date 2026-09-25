@@ -241,15 +241,15 @@ private fun DocumentPanel(vm: AppViewModel, i: Intervention, modifier: Modifier)
             if (src != null) {
                 Text(src.name, style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    if (src.pageCount > 1) "Seule la 1re page est complétée ; les ${src.pageCount - 1} page(s) suivante(s) sont conservées telles quelles."
-                    else "Document d'une page.",
+                    if (i.includeOriginal) "PDF envoyé : page 1 = document rempli par le technicien, page 2 = document d'origine."
+                    else "PDF envoyé : le document rempli seul.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(checked = i.includeOriginal, onCheckedChange = { c -> vm.update(i.id) { it.copy(includeOriginal = c) } })
-                Text("Ajouter aussi le document d'origine (non complété) à la fin du PDF")
+                Text("Joindre le document d'origine en page 2")
             }
         }
 

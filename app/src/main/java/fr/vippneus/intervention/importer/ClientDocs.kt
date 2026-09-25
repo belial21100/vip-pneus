@@ -16,11 +16,9 @@ sealed interface ImportPlan {
     data class Fiche(
         override val docType: String?,
         val values: Map<String, String>,
-        /** La 1re page du PDF est une fiche FPS vierge : remplacée par la fiche remplie. */
-        val skipFirstPage: Boolean,
     ) : ImportPlan
 
-    /** Le document client lui-même est complété, champs placés automatiquement. */
+    /** Le document du client sert de fiche d'inter (Mastra) : on écrit directement dessus. */
     data class Feuille(
         override val docType: String,
         val template: DocTemplate,
@@ -51,17 +49,15 @@ data class TireLine(
  */
 object ClientDocs {
 
-    fun analyze(text: DocText, firstPageIsFps: Boolean, technicien: String, today: String): ImportPlan {
+    fun analyze(text: DocText, technicien: String, today: String): ImportPlan {
         val base = buildMap {
             put(K.DATE, today)
             if (technicien.isNotBlank()) put(K.MONTEUR, technicien.trim())
         }
-        if (!firstPageIsFps) Interfit.plan(text, technicien, today)?.let { return it }
-        Manuloc.parse(text)?.let { return ImportPlan.Fiche("Bon de commande Manuloc", base + it, firstPageIsFps) }
-        Continental.parse(text)?.let { return ImportPlan.Fiche("Mobile Service Continental", base + it, firstPageIsFps) }
-        val generic = Generic.parse(text)
-        if (firstPageIsFps) return ImportPlan.Fiche("Fiche d'intervention FPS", base + generic, true)
-        return ImportPlan.Inconnu(base + generic)
+        Interfit.plan(text, technicien, today)?.let { return it }
+        Manuloc.parse(text)?.let { return ImportPlan.Fiche("Bon de commande Manuloc", base + it) }
+        Continental.parse(text)?.let { return ImportPlan.Fiche("Mobile Service Continental", base + it) }
+        return ImportPlan.Inconnu(base + Generic.parse(text))
     }
 
     // ------------------------------------------------------------------ outils communs
@@ -293,16 +289,17 @@ object ClientDocs {
         /** Champs de la feuille, positionnés par rapport aux étiquettes imprimées (relevés sur une feuille remplie). */
         fun plan(t: DocText, technicien: String, today: String): ImportPlan.Feuille? {
             if (!t.contains("feuille de tache")) return null
-            val lecture = t.label("Lecture du compteur", page = 0) ?: return null
-            val monteur = t.label("Monteur", page = 0, exact = true)
-            val arrivee = t.label("Heure d'arrivée", page = 0)
-            val depart = t.label("Heure de départ", page = 0)
-            val terminee = t.label("Date terminée", page = 0)
-            val duree = t.label("Durée", page = 0, exact = true)
-            val couple = t.label("Couple de serrage", page = 0)
-            val instructions = t.label("Instructions spéciales", page = 0)
-            val date = t.pageRuns(0).filter { it.norm == "date" }.maxByOrNull { it.baseline }
-            val recu = t.label("Reçu par", page = 0)
+            val p = 0
+            val lecture = t.label("Lecture du compteur", page = p) ?: return null
+            val monteur = t.label("Monteur", page = p, exact = true)
+            val arrivee = t.label("Heure d'arrivée", page = p)
+            val depart = t.label("Heure de départ", page = p)
+            val terminee = t.label("Date terminée", page = p)
+            val duree = t.label("Durée", page = p, exact = true)
+            val couple = t.label("Couple de serrage", page = p)
+            val instructions = t.label("Instructions spéciales", page = p)
+            val date = t.pageRuns(p).filter { it.norm == "date" }.maxByOrNull { it.baseline }
+            val recu = t.label("Reçu par", page = p)
 
             fun f(
                 anchor: Run?, key: String, label: String, dx0: Float, dy0: Float, dx1: Float, dy1: Float, size: Float,
@@ -311,8 +308,8 @@ object ClientDocs {
                 PlacedField(PREFIX + key, label, it.x0 + dx0, it.baseline + dy0, it.x0 + dx1, it.baseline + dy1, size, hint = hint, numeric = numeric, unit = unit)
             }
 
-            val torque = t.lines(0).firstNotNullOfOrNull { Regex("""=\s*(\d+)\s*Nm\s*\(\+/-\s*(\d+)""").find(it) }
-            val hour = t.lines(0).firstNotNullOfOrNull { Regex("""(?i)Horam[eè]tre\s*:?\s*(\d+)\s*h""").find(it) }
+            val torque = t.lines(p).firstNotNullOfOrNull { Regex("""=\s*(\d+)\s*Nm\s*\(\+/-\s*(\d+)""").find(it) }
+            val hour = t.lines(p).firstNotNullOfOrNull { Regex("""(?i)Horam[eè]tre\s*:?\s*(\d+)\s*h""").find(it) }
 
             val fields = listOfNotNull(
                 f(instructions, "lieu", "Lieu d'intervention (si différent)", 126f, -2.2f, 318f, 20f, 24f),
@@ -336,17 +333,17 @@ object ClientDocs {
                 f(recu, "recuPar", "Reçu par (nom du client)", 90f, 12f, 240f, 26f, 15f),
             )
             val signature = recu?.let { PlacedBox(it.x0 + 240f, it.baseline - 23f, it.x0 + 348f, it.baseline + 21f) }
-            val template = DocTemplate("interfit", "Feuille de tâche Interfit", fields, signature)
+            val template = DocTemplate("interfit", "Feuille de tâche Mastra", fields, signature)
 
             val values = mutableMapOf<String, String>()
             if (technicien.isNotBlank() && monteur != null) values[PREFIX + "monteur"] = technicien.trim()
             if (date != null) values[PREFIX + "date"] = today
             values[DocKeys.DATE] = today
-            t.label("Facturer", page = 0)?.let { t.rightOf(it, 120f) }?.let { values[DocKeys.CLIENT] = it }
-            t.label("Livrer à", page = 0)?.let { t.valueBlock(it).joinToString(" ") }?.takeIf { it.isNotBlank() }?.let {
+            values[DocKeys.CLIENT] = "MASTRA"
+            t.label("Livrer à", page = p)?.let { t.valueBlock(it).joinToString(" ") }?.takeIf { it.isNotBlank() }?.let {
                 values[DocKeys.SITE] = it.replace(Regex("\\s+"), " ")
             }
-            t.label("Adresse du site de livraison", page = 0)?.let { t.valueBlock(it).joinToString(" ") }?.let { adr ->
+            t.label("Adresse du site de livraison", page = p)?.let { t.valueBlock(it).joinToString(" ") }?.let { adr ->
                 val parts = adr.split(',').map { it.trim() }.filter { it.isNotEmpty() }
                 val cpIdx = parts.indexOfFirst { it.matches(Regex("""\d{5}""")) }
                 if (cpIdx >= 0) {
@@ -356,7 +353,7 @@ object ClientDocs {
                     CP_ANY.find(adr)?.let { values[DocKeys.CP] = it.groupValues[1] }
                 }
             }
-            t.label("ID", page = 0, exact = true)?.let { t.rightOf(it, 120f) }?.let { values[DocKeys.REFERENCE] = it }
+            t.label("ID", page = p, exact = true)?.let { t.rightOf(it, 120f) }?.let { values[DocKeys.REFERENCE] = "JobSheet_$it" }
 
             val hints = fields.filter { it.hint.isNotEmpty() }.associate { it.key to it.hint }
             return ImportPlan.Feuille(template.name, template, values, hints)

@@ -75,13 +75,13 @@ object Naming {
                 )
             }
         }
-        val body = (parts + date + initiales.trim()).map { it.replace('\n', ' ').trim() }.filter { it.isNotEmpty() }
+        val infos = parts.map { it.replace('\n', ' ').trim() }.filter { it.isNotEmpty() }
             .fold(mutableListOf<String>()) { acc, p ->
-                // Évite les répétitions (ex. ville déjà dans le nom du site)
-                if (acc.none { it.equals(p, ignoreCase = true) }) acc += p
+                // Évite les répétitions (ex. code postal ou ville déjà dans le nom du site)
+                if (acc.none { it.contains(p, ignoreCase = true) }) acc += p
                 acc
             }
-            .joinToString(" ")
+        val body = (infos + date + initiales.trim()).filter { it.isNotEmpty() }.joinToString(" ")
         return sanitize(stripAccents(if (dept != null) "$dept- $body" else body))
     }
 

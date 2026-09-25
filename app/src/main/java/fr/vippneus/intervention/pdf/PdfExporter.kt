@@ -116,7 +116,6 @@ class PdfExporter(private val context: Context) {
                         AttachmentKind.PDF -> {
                             val src = loadDecrypted(f)
                             opened += src
-                            if (a.skipFirstPage && src.numberOfPages > 1) src.removePage(0)
                             merger.appendDocument(doc, src)
                         }
                         AttachmentKind.IMAGE -> PdfPages.addImagePage(doc, f)

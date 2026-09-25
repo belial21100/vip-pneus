@@ -6,12 +6,17 @@ les bons restent enregistrés sur la tablette.
 
 ## Principe
 
-Les clients envoient des PDF (bon de commande, feuille de tâche…). Au lieu d'ajouter
-chaque champ à la main dans Adobe, on **importe le PDF dans l'application** : elle lit
-les informations du document et **remplit automatiquement** la fiche par-dessus. Le
-technicien n'a plus qu'à vérifier et compléter ce qui se constate sur place (horamètre,
-serrage, remarques, signature). On n'intervient que sur la **1re page** ; les pages
-suivantes du document client sont conservées telles quelles.
+Le client envoie un PDF d'une page. Au lieu d'ajouter chaque champ à la main dans Adobe,
+on **importe le PDF dans l'application** : elle lit les informations du document et
+**remplit automatiquement** la fiche d'inter. Le technicien n'a plus qu'à vérifier et
+compléter ce qui se constate sur place (horamètre, serrage, remarques, signature).
+
+Deux traitements :
+
+- **Mac2, Conti…** : la fiche d'intervention FPS est créée et pré-remplie ;
+  PDF envoyé = la fiche, puis le document du client.
+- **Mastra** : pas de fiche FPS, le technicien écrit directement sur le document du
+  client ; PDF envoyé = page 1 le document rempli, page 2 le document d'origine.
 
 ### Documents reconnus automatiquement
 
@@ -19,9 +24,8 @@ suivantes du document client sont conservées telles quelles.
 |---|---|
 | **Bon de commande Manuloc** | Fiche presse mobile FPS pré-remplie : n° de commande, client mandataire (adresse de facturation), client utilisateur (adresse de livraison), n° de série et type d'engin, pneus AV/AR (dimensions, marque, profil, type, quantité) et quantités de prestations par taille de jante. Le bon de commande est joint après la fiche. |
 | **Mobile Service Continental** (Conti360°) | Fiche FPS pré-remplie : n° Mobile Service, rendez-vous, site (localisation), modèle, immatriculation, n° de flotte, pneus montés et prestations. Document joint après la fiche. |
-| **Feuille de tâche Interfit** | La feuille du client est complétée directement : lecture du compteur, monteur, heures, date, « Reçu par », couple de serrage, lieu d'intervention et signature sont placés automatiquement aux emplacements habituels (couple préconisé et horamètre de la demande affichés en aide). |
-| **PDF commençant par une fiche FPS vierge** | La fiche vierge est remplacée par la fiche remplie, les pages suivantes sont conservées. |
-| Autre document | Au choix : fiche FPS avec le document joint, ou écriture libre sur la 1re page. |
+| **Feuille de tâche Mastra** (Interfit) | Écriture directe sur le document : lecture du compteur, monteur, heures, date, « Reçu par », couple de serrage, lieu d'intervention et signature sont placés automatiquement aux emplacements et tailles utilisés par les techniciens (couple préconisé et horamètre de la demande affichés en aide). Page 2 : le document d'origine. |
+| Autre document | Au choix : fiche FPS avec le document joint, ou écriture libre sur le document. |
 
 Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office.
 
@@ -41,7 +45,8 @@ Des photos (bon papier, pneus…) et d'autres PDF peuvent être ajoutés à la s
 
 Nom de fichier par défaut, sur le modèle déjà utilisé :
 `02- LOC TEST ENTREPOT DUPONT 02000 LAON 1234567 24-08-2026 CE.pdf`
-(département, client, site, code postal, ville, n° de commande, date, initiales).
+(département, client, site, code postal, ville, n° de commande, date, initiales) ;
+pour Mastra : `54- MASTRA <livrer à> JobSheet_<n°> <date> <initiales>.pdf`.
 
 ### Réglages
 

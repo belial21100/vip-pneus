@@ -9,9 +9,7 @@ import fr.vippneus.intervention.data.AttachmentKind
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.SourceDoc
-import fr.vippneus.intervention.importer.ClientDocs
-import fr.vippneus.intervention.importer.DocText
-import fr.vippneus.intervention.importer.FpsPageDetector
+import fr.vippneus.intervention.importer.ClientImport
 import fr.vippneus.intervention.importer.ImportPlan
 import fr.vippneus.intervention.pdf.PdfExporter
 import fr.vippneus.intervention.pdf.PdfPages
@@ -26,9 +24,8 @@ import java.io.File
 /**
  * Vérification sur de vrais documents clients, conservés hors du dépôt (données personnelles).
  * Lancer avec la variable d'environnement VIP_SAMPLES_DIR = dossier contenant les PDF.
- * Pour chaque PDF, on analyse le document complet puis sa dernière page seule (le document
- * tel qu'envoyé par le client) ; les PDF remplis automatiquement sont écrits dans
- * app/build/test-output/samples.
+ * Pour chaque PDF, on analyse sa dernière page seule (le document tel qu'envoyé par le client) ;
+ * les PDF remplis automatiquement sont écrits dans app/build/test-output/samples.
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -44,23 +41,19 @@ class SamplesTest {
         val out = File(System.getProperty("user.dir"), "build/test-output/samples").apply { mkdirs() }
 
         dir!!.listFiles { f -> f.name.endsWith(".pdf", ignoreCase = true) }!!.sorted().forEachIndexed { index, pdf ->
-            val variants = mutableListOf("complet" to pdf)
+            val variants = mutableListOf<Pair<String, File>>()
             PDDocument.load(pdf).use { doc ->
-                if (doc.numberOfPages > 1) {
-                    val last = File(out, "src-$index-client.pdf")
-                    PDDocument().use { single ->
-                        single.importPage(doc.getPage(doc.numberOfPages - 1))
-                        single.save(last)
-                    }
-                    variants += "client" to last
+                val last = File(out, "src-$index-client.pdf")
+                PDDocument().use { single ->
+                    single.importPage(doc.getPage(doc.numberOfPages - 1))
+                    single.save(last)
                 }
+                variants += "client" to last
             }
             for ((label, file) in variants) {
                 val info = PdfPages.info(file)
-                val text = PdfExporter.loadDecrypted(file).use { DocText.read(it) }
-                val fps = FpsPageDetector.isFpsForm(context, file, info.width, info.height)
-                val plan = ClientDocs.analyze(text, fps, "Chris.E", "25/09/26")
-                println("===== [$index/$label] ${pdf.name} : fiche FPS en page 1 = $fps -> ${plan.javaClass.simpleName} (${plan.docType})")
+                val plan = ClientImport.analyze(file, "Chris.E", "25/09/26")
+                println("===== [$index/$label] ${pdf.name} -> ${plan.javaClass.simpleName} (${plan.docType})")
                 val work = File(out, "work-$index-$label").apply { deleteRecursively(); mkdirs() }
                 val copy = File(work, "source.pdf").also { file.copyTo(it, overwrite = true) }
                 val intervention = when (plan) {
@@ -68,7 +61,7 @@ class SamplesTest {
                         plan.values.toSortedMap().forEach { (k, v) -> println("   $k = $v") }
                         Intervention(
                             "s$index", InterventionType.FPS, 0L, values = plan.values,
-                            attachments = listOf(Attachment("a", copy.name, pdf.name, AttachmentKind.PDF, info.pageCount, plan.skipFirstPage && info.pageCount > 1)),
+                            attachments = listOf(Attachment("a", copy.name, pdf.name, AttachmentKind.PDF, info.pageCount)),
                         )
                     }
                     is ImportPlan.Feuille -> {

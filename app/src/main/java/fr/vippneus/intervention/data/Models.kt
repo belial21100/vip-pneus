@@ -62,8 +62,6 @@ data class Attachment(
     val name: String,
     val kind: AttachmentKind,
     val pages: Int = 1,
-    /** La 1re page est une fiche FPS vierge (remplacée par la fiche remplie) : on ne la joint pas. */
-    val skipFirstPage: Boolean = false,
 )
 
 /** Zone de saisie placée sur la page 1 d'un document client reconnu (points, origine en haut à gauche). */
@@ -128,8 +126,8 @@ data class Intervention(
     /** Nom du type de document reconnu à l'import (ex. « Bon de commande Manuloc »). */
     val recognized: String? = null,
     val attachments: List<Attachment> = emptyList(),
-    /** Mode DOCUMENT : ajoute aussi le document d'origine (non annoté) à la fin. */
-    val includeOriginal: Boolean = false,
+    /** Mode DOCUMENT : le document d'origine (non rempli) suit la page remplie, comme aujourd'hui pour Mastra. */
+    val includeOriginal: Boolean = true,
     /** Nom de fichier choisi (sans .pdf). Vide = nom automatique. */
     val fileName: String = "",
     val generatedAt: Long? = null,

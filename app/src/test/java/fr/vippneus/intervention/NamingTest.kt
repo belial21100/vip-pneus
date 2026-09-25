@@ -58,7 +58,30 @@ class NamingTest {
                 DocKeys.DATE to "27/08/26",
             ),
         )
-        assertEquals("54- CLIENT TEST ESAT VILLE-TEST 54000 VILLE-TEST 7654321 27-08-2026 CE", Naming.defaultFileName(i, "CE"))
+        assertEquals("54- CLIENT TEST ESAT VILLE-TEST 54000 7654321 27-08-2026 CE", Naming.defaultFileName(i, "CE"))
+    }
+
+    @Test
+    fun nomDeFichier_feuilleMastra_commeAujourdhui() {
+        val i = Intervention(
+            id = "x", type = InterventionType.DOCUMENT, createdAt = 0L,
+            values = mapOf(
+                DocKeys.CLIENT to "MASTRA",
+                DocKeys.SITE to "ESAT DU PARC (VILLE-TEST 54000)",
+                DocKeys.CP to "54000",
+                DocKeys.VILLE to "VILLE-TEST",
+                DocKeys.REFERENCE to "JobSheet_7654321",
+                DocKeys.DATE to "27/08/26",
+            ),
+        )
+        assertEquals("54- MASTRA ESAT DU PARC (VILLE-TEST 54000) JobSheet_7654321 27-08-2026 CE", Naming.defaultFileName(i, "CE"))
+    }
+
+    @Test
+    fun nomDeFichier_initialesToujoursPresentes() {
+        // « CE » figure dans « FRANCE » : les initiales ne doivent pas disparaître pour autant
+        val i = fps(K.CLIENT_MANDATAIRE to "Loc Test", K.CLIENT_UTILISATEUR to "Entrepot France", K.DATE to "24/08/26")
+        assertEquals("LOC TEST ENTREPOT FRANCE 24-08-2026 CE", Naming.defaultFileName(i, "CE"))
     }
 
     @Test
