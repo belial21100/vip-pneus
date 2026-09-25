@@ -193,10 +193,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         super.onCleared()
     }
 
+    /** Réglages : pris en compte tout de suite, écrits sur la tablette dans la foulée. */
     fun saveSettings(s: Settings) {
-        settingsStore.save(s)
-        _settings.value = settingsStore.load()
+        val t = s.trimmed()
+        _settings.value = t
+        viewModelScope.launch(disk) {
+            if (!settingsStore.save(t)) message("Enregistrement des réglages impossible")
+        }
     }
+
+    /** Fin de la première configuration ; un document reçu entre-temps est alors importé. */
+    fun completeSetup(s: Settings) {
+        saveSettings(s.copy(setupDone = true))
+        deferredImport?.let { (uri, mime) ->
+            deferredImport = null
+            importClient(uri, mime)
+        }
+    }
+
+    /** Document reçu (« Ouvrir avec ») avant la première configuration. */
+    private var deferredImport: Pair<Uri, String?>? = null
 
     // ---------------------------------------------------------------- création
 
@@ -372,7 +388,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /** Fichier reçu d'une autre application (« Ouvrir avec », « Partager »). */
-    fun receive(uri: Uri, mimeHint: String?) = importClient(uri, mimeHint)
+    fun receive(uri: Uri, mimeHint: String?) {
+        if (_settings.value.setupDone) importClient(uri, mimeHint) else deferredImport = uri to mimeHint
+    }
 
     // ---------------------------------------------------------------- pièces jointes
 

@@ -2,6 +2,7 @@ package fr.vippneus.intervention.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -21,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,33 +35,16 @@ fun AppRoot(vm: AppViewModel) {
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
     val busy by vm.busy.collectAsStateWithLifecycle()
     val pending by vm.pendingImport.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
     // Garde l'état de chaque écran (défilement, onglet...) pendant qu'on navigue
     val states = rememberSaveableStateHolder()
 
-    BackHandler(enabled = vm.backStack.size > 1) { vm.back() }
+    BackHandler(enabled = settings.setupDone && vm.backStack.size > 1) { vm.back() }
 
     Box(Modifier.fillMaxSize()) {
-        AnimatedContent(
-            targetState = vm.backStack.last(),
-            transitionSpec = {
-                // En avant si l'écran quitté est encore dans la pile
-                val forward = initialState in vm.backStack
-                val enter = slideInHorizontally(tween(260)) { w -> if (forward) w / 8 else -w / 8 } + fadeIn(tween(220))
-                val exit = slideOutHorizontally(tween(260)) { w -> if (forward) -w / 8 else w / 8 } + fadeOut(tween(160))
-                enter togetherWith exit
-            },
-            label = "ecran",
-        ) { screen ->
-            states.SaveableStateProvider(screen.toString()) {
-                when (screen) {
-                    Screen.Home -> HomeScreen(vm)
-                    Screen.Settings -> SettingsScreen(vm)
-                    is Screen.Fps -> FpsFormScreen(vm, screen.id)
-                    is Screen.Document -> DocumentScreen(vm, screen.id)
-                    is Screen.Editor -> EditorScreen(vm, screen.id)
-                    is Screen.Viewer -> ViewerScreen(vm, screen.id)
-                }
-            }
+        // Première ouverture : réglages obligatoires avant tout le reste
+        Crossfade(targetState = settings.setupDone, label = "configuration") { ready ->
+            if (ready) Screens(vm, states) else SetupScreen(vm)
         }
         SnackbarHost(
             snackbar,
@@ -84,5 +69,32 @@ fun AppRoot(vm: AppViewModel) {
             onDocument = { vm.resolvePendingImport(AppViewModel.ImportChoice.DOCUMENT) },
             onCancel = { vm.resolvePendingImport(AppViewModel.ImportChoice.ANNULER) },
         )
+    }
+}
+
+/** Écrans de l'application, avec transition et état conservé pendant la navigation. */
+@Composable
+private fun Screens(vm: AppViewModel, states: SaveableStateHolder) {
+    AnimatedContent(
+        targetState = vm.backStack.last(),
+        transitionSpec = {
+            // En avant si l'écran quitté est encore dans la pile
+            val forward = initialState in vm.backStack
+            val enter = slideInHorizontally(tween(260)) { w -> if (forward) w / 8 else -w / 8 } + fadeIn(tween(220))
+            val exit = slideOutHorizontally(tween(260)) { w -> if (forward) -w / 8 else w / 8 } + fadeOut(tween(160))
+            enter togetherWith exit
+        },
+        label = "ecran",
+    ) { screen ->
+        states.SaveableStateProvider(screen.toString()) {
+            when (screen) {
+                Screen.Home -> HomeScreen(vm)
+                Screen.Settings -> SettingsScreen(vm)
+                is Screen.Fps -> FpsFormScreen(vm, screen.id)
+                is Screen.Document -> DocumentScreen(vm, screen.id)
+                is Screen.Editor -> EditorScreen(vm, screen.id)
+                is Screen.Viewer -> ViewerScreen(vm, screen.id)
+            }
+        }
     }
 }

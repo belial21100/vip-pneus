@@ -22,6 +22,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import fr.vippneus.intervention.data.Settings
+import fr.vippneus.intervention.data.SettingsStore
 import fr.vippneus.intervention.data.SignatureData
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import fr.vippneus.intervention.ui.AppRoot
@@ -31,6 +33,8 @@ import fr.vippneus.intervention.ui.VipTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -83,6 +87,10 @@ class UiFlowTest {
         (field.get(instance) as List<View>).toList()
     }.getOrDefault(emptyList())
 
+    /** Réglages du technicien, première configuration déjà faite. */
+    private fun configure(vm: AppViewModel) =
+        vm.saveSettings(Settings(technicien = "Chris.E", initiales = "CE", emailCompta = "compta@example.com", setupDone = true))
+
     private fun newVm(): AppViewModel {
         val app = ApplicationProvider.getApplicationContext<Application>()
         PDFBoxResourceLoader.init(app)
@@ -117,7 +125,7 @@ class UiFlowTest {
     @Test
     fun ficheFps_saisieApercuAjustement() {
         val vm = newVm()
-        vm.saveSettings(vm.settings.value.copy(technicien = "Chris.E", initiales = "CE", emailCompta = "compta@example.com"))
+        configure(vm)
         compose.setContent { VipTheme { AppRoot(vm) } }
         snap("01-accueil-vide")
 
@@ -179,12 +187,69 @@ class UiFlowTest {
 
         vm.navigate(Screen.Settings)
         snap("06-reglages")
+        input("Copie à (facultatif)", "chef@exemple.fr")
+        idle(2)
+        snap("06b-reglages-modifies")
+        compose.onNodeWithText("Enregistrer").performClick()
+        idle(4)
+        assertEquals("chef@exemple.fr", vm.settings.value.emailCopie)
+    }
+
+    @Test
+    fun premiereOuverture_reglagesObligatoires() {
+        val vm = newVm()
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        idle(4)
+        snap("00a-bienvenue-technicien")
+        // Les initiales se déduisent du nom
+        input("Nom affiché sur les bons", "Chris.E")
+        idle(2)
+        snap("00b-bienvenue-technicien-rempli")
+        compose.onNodeWithText("Continuer").performClick()
+        idle(4)
+        assertEquals("CE", vm.settings.value.initiales)
+        assertFalse(vm.settings.value.setupDone)
+        // Adresse invalide : on ne passe pas
+        input("E-mail de la comptabilité", "compta")
+        compose.onNodeWithText("Continuer").performClick()
+        idle(4)
+        snap("00c-bienvenue-compta-erreur")
+        compose.onAllNodesWithText("Adresse e-mail invalide", substring = true, useUnmergedTree = true)[0].assertExists()
+        input("E-mail de la comptabilité", "@exemple.fr")
+        compose.onNodeWithText("Continuer").performClick()
+        idle(4)
+        snap("00d-bienvenue-recapitulatif")
+        compose.onNodeWithText("Commencer").performClick()
+        idle(10)
+        assertTrue(vm.settings.value.setupDone)
+        // Bien enregistré sur la tablette
+        val store = SettingsStore(app)
+        waitFor { store.load().setupDone }
+        val saved = store.load()
+        assertEquals("Chris.E", saved.technicien)
+        assertEquals("CE", saved.initiales)
+        assertEquals("compta@exemple.fr", saved.emailCompta)
+        assertTrue(saved.setupDone)
+        snap("00e-accueil-apres-configuration")
+    }
+
+    @Test
+    @Config(qualifiers = "w800dp-h1280dp-port-mdpi")
+    fun premiereOuverture_portrait() {
+        val vm = newVm()
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        idle(4)
+        input("Nom affiché sur les bons", "Chris.E")
+        idle(2)
+        snap("00f-bienvenue-portrait")
     }
 
     @Test
     @Config(qualifiers = "w800dp-h1280dp-port-mdpi")
     fun ficheFps_portrait() {
         val vm = newVm()
+        configure(vm)
         compose.setContent { VipTheme { AppRoot(vm) } }
         snap("07a-accueil-portrait")
         compose.onNodeWithText("Nouvelle fiche vierge").performClick()
@@ -196,7 +261,7 @@ class UiFlowTest {
     @Test
     fun documentClient_import() {
         val vm = newVm()
-        vm.saveSettings(vm.settings.value.copy(technicien = "Chris.E", initiales = "CE"))
+        configure(vm)
         val app = ApplicationProvider.getApplicationContext<Application>()
         // Feuille de tâche fictive importée comme le ferait le sélecteur de fichiers
         val src = File(app.cacheDir, "Feuille de tache 1234567.pdf").also { FakeDocs.interfit(it) }
@@ -230,7 +295,7 @@ class UiFlowTest {
     @Test
     fun bonDeCommande_ficheRemplieAutomatiquement() {
         val vm = newVm()
-        vm.saveSettings(vm.settings.value.copy(technicien = "Chris.E", initiales = "CE", emailCompta = "compta@example.com"))
+        configure(vm)
         val app = ApplicationProvider.getApplicationContext<Application>()
         val src = File(app.cacheDir, "Bon de commande 7654321.pdf").also { FakeDocs.manuloc(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
@@ -257,7 +322,7 @@ class UiFlowTest {
     @Config(qualifiers = "w1280dp-h800dp-land-night-mdpi")
     fun modeSombre() {
         val vm = newVm()
-        vm.saveSettings(vm.settings.value.copy(technicien = "Chris.E", initiales = "CE", emailCompta = "compta@example.com"))
+        configure(vm)
         val app = ApplicationProvider.getApplicationContext<Application>()
         val src = File(app.cacheDir, "Bon de commande 7654321.pdf").also { FakeDocs.manuloc(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
@@ -274,7 +339,7 @@ class UiFlowTest {
     @Config(qualifiers = "w960dp-h600dp-land-mdpi")
     fun petiteTablette() {
         val vm = newVm()
-        vm.saveSettings(vm.settings.value.copy(technicien = "Chris.E", initiales = "CE", emailCompta = "compta@example.com"))
+        configure(vm)
         val app = ApplicationProvider.getApplicationContext<Application>()
         val src = File(app.cacheDir, "Bon de commande 7654321.pdf").also { FakeDocs.manuloc(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
@@ -290,6 +355,7 @@ class UiFlowTest {
     @Test
     fun documentInconnu_choix() {
         val vm = newVm()
+        configure(vm)
         val app = ApplicationProvider.getApplicationContext<Application>()
         val src = File(app.cacheDir, "Devis.pdf").also { FakeDocs.other(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
@@ -302,7 +368,7 @@ class UiFlowTest {
     @Test
     fun accueil_plusieursBons() {
         val vm = newVm()
-        vm.saveSettings(vm.settings.value.copy(technicien = "Chris.E", initiales = "CE", emailCompta = "compta@example.com"))
+        configure(vm)
         val now = System.currentTimeMillis()
         fun fps(values: Map<String, String>, sent: Boolean = false, signed: Boolean = false) {
             val id = vm.createFps()

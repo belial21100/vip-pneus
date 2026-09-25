@@ -55,14 +55,18 @@ pour Mastra : `54- MASTRA <livrer à> JobSheet_<n°> <date> <initiales>.pdf`.
 
 Nom du technicien (pré-remplit « Commercial / Monteur »), initiales (fin du nom des
 fichiers), e-mail de la comptabilité, copie éventuelle et message de l'e-mail.
+À la première ouverture, une page **Bienvenue** (technicien, comptabilité, récapitulatif)
+les demande obligatoirement avant d'accéder aux bons ; les adresses e-mail sont vérifiées.
+Tout est enregistré sur la tablette (rien n'est envoyé ailleurs) et reste modifiable dans
+**Réglages** (bouton « Enregistrer »).
 
 ## Installation sur les tablettes
 
 1. Copier le fichier `vip-pneus-<version>.apk` sur la tablette (e-mail, clé USB, Drive…).
 2. L'ouvrir ; accepter « Installer des applications inconnues » pour l'application
    utilisée (Fichiers, Gmail…).
-3. Au premier lancement, ouvrir **Réglages** et renseigner le technicien et l'e-mail
-   de la comptabilité.
+3. Au premier lancement, la page **Bienvenue** demande le nom du technicien, ses initiales
+   et l'e-mail de la comptabilité.
 
 Android 8.0 minimum. Conçue pour tablette (paysage et portrait), utilisable sur téléphone.
 

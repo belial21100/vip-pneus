@@ -601,6 +601,8 @@ fun VipField(
     supporting: String? = null,
     trailing: (@Composable () -> Unit)? = null,
     focusRequester: FocusRequester? = null,
+    /** Message d'erreur sous le champ (remplace [supporting]). */
+    error: String? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val sparkle: @Composable () -> Unit = {
@@ -633,7 +635,8 @@ fun VipField(
                 auto -> sparkle
                 else -> null
             },
-            supportingText = supporting?.let { { Text(it) } },
+            supportingText = (error ?: supporting)?.let { { Text(it) } },
+            isError = error != null,
             shape = MaterialTheme.shapes.small,
             colors = vipFieldColors(auto),
             textStyle = MaterialTheme.typography.bodyLarge,
