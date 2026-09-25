@@ -95,6 +95,11 @@ class ImportTest {
         val keys = plan.template.fields.map { it.key }
         assertTrue(keys.containsAll(listOf("if.compteur", "if.monteur", "if.date", "if.recuPar", "if.couple", "if.lieu")))
         assertNotNull(plan.template.signature)
+        // À remplir avant l'envoi (liste « À compléter »)
+        assertEquals(
+            setOf("if.compteur", "if.couple", "if.monteur", "if.date", "if.recuPar"),
+            plan.template.fields.filter { it.required }.map { it.key }.toSet(),
+        )
         val compteur = plan.template.fields.first { it.key == "if.compteur" }
         assertEquals(136f, compteur.left, 2f) // cellule à droite de « Lecture du compteur »
         assertEquals("Chris.E", plan.values["if.monteur"])

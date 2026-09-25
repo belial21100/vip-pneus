@@ -1,0 +1,94 @@
+package fr.vippneus.intervention
+
+import fr.vippneus.intervention.data.Completion
+import fr.vippneus.intervention.data.DocKeys
+import fr.vippneus.intervention.data.DocTemplate
+import fr.vippneus.intervention.data.Intervention
+import fr.vippneus.intervention.data.InterventionType
+import fr.vippneus.intervention.data.Overlay
+import fr.vippneus.intervention.data.OverlayKind
+import fr.vippneus.intervention.data.PlacedBox
+import fr.vippneus.intervention.data.PlacedField
+import fr.vippneus.intervention.data.SignatureData
+import fr.vippneus.intervention.pdf.FpsTemplate.K
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/** Liste « À compléter » et champs lus dans le document du client. */
+class CompletionTest {
+    private val sig = SignatureData(listOf(listOf(0f, 0f, 10f, 10f)), 100f, 50f, 3f)
+
+    private fun missing(i: Intervention) = Completion.missing(i).map { it.label }
+
+    @Test
+    fun ficheFps_videPuisComplete() {
+        val empty = Intervention("x", InterventionType.FPS, 0L)
+        assertEquals(8, Completion.todos(empty).size)
+        assertEquals(8, missing(empty).size)
+
+        val full = empty.copy(
+            values = mapOf(
+                K.NUMERO_COMMANDE to "1234567",
+                K.CLIENT_UTILISATEUR to "Entrepôt Test",
+                K.TYPE to "S4.5FT",
+                K.HORAMETRE to "1293",
+                K.pneu("ar", "quantite") to "2",
+                K.prestation("dechets", "autres") to "4",
+                // Serrage : la remarque suffit (« Démonté et remonté par le client »)
+                K.SERRAGE_AR_REMARQUE to "Démonté et remonté par le client",
+            ),
+            signature = sig,
+        )
+        assertEquals(emptyList<String>(), missing(full))
+    }
+
+    @Test
+    fun ficheFps_signatureVideNeComptePas() {
+        val i = Intervention("x", InterventionType.FPS, 0L, signature = SignatureData(emptyList(), 100f, 50f, 3f))
+        assertTrue("Signature du client" in missing(i))
+    }
+
+    @Test
+    fun feuilleMastra_champsObligatoiresEtSignature() {
+        fun f(key: String, label: String, required: Boolean) = PlacedField(key, label, 0f, 0f, 10f, 10f, 12f, required = required)
+        val t = DocTemplate(
+            "interfit", "Feuille de tâche Mastra",
+            listOf(
+                f("if.compteur", "Lecture du compteur (h)", true),
+                f("if.heureArrivee", "Heure d'arrivée", false),
+                f("if.recuPar", "Reçu par (nom du client)", true),
+            ),
+            signature = PlacedBox(0f, 0f, 10f, 10f),
+        )
+        val i = Intervention("x", InterventionType.DOCUMENT, 0L, template = t, values = mapOf("if.compteur" to "4559"))
+        // Libellés courts (sans la parenthèse), champs facultatifs ignorés
+        assertEquals(listOf("Reçu par", "Signature du client"), missing(i))
+        assertEquals(3, Completion.todos(i).size)
+    }
+
+    @Test
+    fun documentQuelconque_pageEtClient() {
+        val i = Intervention("x", InterventionType.DOCUMENT, 0L)
+        assertEquals(listOf("Compléter la page 1", "Client"), missing(i))
+        val done = i.copy(
+            overlays = listOf(Overlay("o", OverlayKind.TEXT, 10f, 10f, "OK")),
+            values = mapOf(DocKeys.CLIENT to "Client Test"),
+        )
+        assertEquals(emptyList<String>(), missing(done))
+    }
+
+    @Test
+    fun champLuDansLeDocument_tantQuIlNestPasModifie() {
+        val i = Intervention(
+            "x", InterventionType.FPS, 0L,
+            values = mapOf(K.NUMERO_COMMANDE to "7654321", K.MONTEUR to "Chris.E"),
+            autoValues = mapOf(K.NUMERO_COMMANDE to "7654321"),
+        )
+        assertTrue(i.isAuto(K.NUMERO_COMMANDE))
+        assertFalse(i.isAuto(K.MONTEUR))
+        assertFalse(i.copy(values = i.values + (K.NUMERO_COMMANDE to "7654322")).isAuto(K.NUMERO_COMMANDE))
+        assertFalse(i.copy(values = i.values - K.NUMERO_COMMANDE).isAuto(K.NUMERO_COMMANDE))
+    }
+}
