@@ -55,6 +55,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -65,6 +66,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -134,6 +136,13 @@ fun HomeScreen(vm: AppViewModel) {
     var filter by rememberSaveable { mutableStateOf(Filter.TOUS) }
     var selection by remember { mutableStateOf(setOf<String>()) }
     var confirmDelete by remember { mutableStateOf<Set<String>?>(null) }
+    // Bons à envoyer dont il manque quelque chose : à confirmer
+    var sendCheck by remember { mutableStateOf<List<String>?>(null) }
+
+    fun trySend(ids: List<String>) {
+        val incomplete = all.filter { it.id in ids && Completion.missing(it).isNotEmpty() }
+        if (incomplete.isEmpty()) vm.send(context, ids) else sendCheck = ids
+    }
 
     val pickDocument = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.importClient(uri)
@@ -179,7 +188,7 @@ fun HomeScreen(vm: AppViewModel) {
             selection = selection,
             onOpen = { i -> if (selection.isNotEmpty()) selection = selection.toggle(i.id) else vm.openIntervention(i) },
             onToggle = { i -> selection = selection.toggle(i.id) },
-            onSend = { i -> vm.send(context, listOf(i.id)) },
+            onSend = { i -> trySend(listOf(i.id)) },
             onPreview = { i -> scope.launch { if (vm.generate(i.id) != null) vm.navigate(Screen.Viewer(i.id)) } },
             onDuplicate = { i -> vm.duplicate(i.id) },
             onDelete = { i -> confirmDelete = setOf(i.id) },
@@ -231,10 +240,34 @@ fun HomeScreen(vm: AppViewModel) {
                 onDelete = { confirmDelete = selection },
                 onSend = {
                     val ids = shown.map { it.id }.filter { it in selection }
-                    vm.send(context, ids)
+                    trySend(ids)
                     selection = emptySet()
                 },
             )
+        }
+    }
+
+    sendCheck?.let { ids ->
+        val bons = all.filter { it.id in ids }
+        val incomplete = bons.map { it to Completion.missing(it) }.filter { it.second.isNotEmpty() }
+        val close = { sendCheck = null }
+        val open = { i: Intervention ->
+            close()
+            vm.openIntervention(i)
+        }
+        val sendAnyway = {
+            close()
+            vm.send(context, ids)
+        }
+        when {
+            incomplete.isEmpty() -> LaunchedEffect(ids) { close() }
+            bons.size == 1 -> MissingDialog(
+                incomplete.first().second,
+                onJump = { open(incomplete.first().first) },
+                onDismiss = close,
+                onSendAnyway = sendAnyway,
+            )
+            else -> IncompleteBonsDialog(incomplete, bons.size, onOpen = open, onDismiss = close, onSendAnyway = sendAnyway)
         }
     }
 
@@ -733,6 +766,21 @@ private fun InterventionCard(
                     Naming.reference(i).takeIf { it.isNotEmpty() }?.let { Meta(Icons.Filled.Tag, it, Modifier.weight(1f, fill = false)) }
                     Meta(Icons.Filled.Event, Naming.formatShort(Naming.interventionDate(i)))
                     if (i.attachments.isNotEmpty()) Meta(Icons.Filled.AttachFile, "${i.attachments.size}")
+                }
+                val missing = todos.filterNot { it.done }
+                if (status != DisplayStatus.ENVOYE && missing.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Row(Modifier.padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.Warning, contentDescription = null, tint = c.warning, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "À compléter : " + missing.joinToString(", ") { it.label },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = c.warning,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
                 Spacer(Modifier.height(14.dp))
                 Row(Modifier.padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {

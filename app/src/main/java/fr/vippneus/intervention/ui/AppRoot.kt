@@ -65,6 +65,7 @@ fun AppRoot(vm: AppViewModel) {
     pending?.let { p ->
         ImportChoiceDialog(
             name = p.name,
+            reason = p.reason,
             onFiche = { vm.resolvePendingImport(AppViewModel.ImportChoice.FICHE) },
             onDocument = { vm.resolvePendingImport(AppViewModel.ImportChoice.DOCUMENT) },
             onCancel = { vm.resolvePendingImport(AppViewModel.ImportChoice.ANNULER) },

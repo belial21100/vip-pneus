@@ -18,10 +18,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.EditNote
@@ -63,12 +66,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import fr.vippneus.intervention.data.Intervention
+import fr.vippneus.intervention.data.Naming
 import fr.vippneus.intervention.data.SignatureData
+import fr.vippneus.intervention.data.Todo
 import fr.vippneus.intervention.pdf.Fonts
 import kotlin.math.roundToInt
 
@@ -350,32 +357,88 @@ fun FileNameDialog(auto: String, current: String, onDismiss: () -> Unit, onConfi
     )
 }
 
-/** Avant l'envoi : ce qu'il manque sur le bon. */
+/** Avant l'envoi : ce qu'il manque sur le bon ; un appui sur un élément y mène directement. */
 @Composable
-fun MissingDialog(missing: List<String>, onDismiss: () -> Unit, onSendAnyway: () -> Unit) {
+fun MissingDialog(missing: List<Todo>, onJump: (Todo) -> Unit, onDismiss: () -> Unit, onSendAnyway: () -> Unit) {
     val c = Vip.colors
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = c.card,
         icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = c.warning) },
-        title = { Text("Il manque des informations") },
+        title = { Text(if (missing.size == 1) "Il manque 1 élément" else "Il manque ${missing.size} éléments") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Ces éléments ne sont pas encore remplis :", color = c.muted)
-                missing.forEach { label ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            Modifier
-                                .size(8.dp)
-                                .background(c.accent, CircleShape),
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                Text("Touchez un élément pour le compléter :", color = c.muted)
+                missing.forEach { t ->
+                    Surface(
+                        onClick = { onJump(t) },
+                        shape = MaterialTheme.shapes.small,
+                        color = c.accentSoft,
+                        contentColor = c.onAccentSoft,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(t.label, style = MaterialTheme.typography.titleSmall)
+                                if (t.hint.isNotEmpty()) {
+                                    Text(t.hint, style = MaterialTheme.typography.bodySmall, color = c.onAccentSoft.copy(alpha = 0.8f))
+                                }
+                            }
+                            Icon(Icons.Filled.ChevronRight, contentDescription = null)
+                        }
                     }
                 }
             }
         },
-        confirmButton = { VipButton("Compléter le bon", onDismiss, compact = true) },
+        confirmButton = { VipButton("Compléter le bon", { onJump(missing.first()) }, compact = true) },
+        dismissButton = { TextButton(onClick = onSendAnyway) { Text("Envoyer quand même") } },
+    )
+}
+
+/** Envoi de plusieurs bons depuis la liste : les bons où il manque quelque chose, et quoi. */
+@Composable
+fun IncompleteBonsDialog(
+    incomplete: List<Pair<Intervention, List<Todo>>>,
+    total: Int,
+    onOpen: (Intervention) -> Unit,
+    onDismiss: () -> Unit,
+    onSendAnyway: () -> Unit,
+) {
+    val c = Vip.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = c.card,
+        icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = c.warning) },
+        title = {
+            Text(if (incomplete.size == 1) "1 bon incomplet sur $total" else "${incomplete.size} bons incomplets sur $total")
+        },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Touchez un bon pour le compléter :", color = c.muted)
+                incomplete.forEach { (i, missing) ->
+                    Surface(
+                        onClick = { onOpen(i) },
+                        shape = MaterialTheme.shapes.small,
+                        color = c.accentSoft,
+                        contentColor = c.onAccentSoft,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(Naming.title(i), style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(
+                                    "Manque : " + missing.joinToString(", ") { it.label },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = c.onAccentSoft.copy(alpha = 0.8f),
+                                )
+                            }
+                            Icon(Icons.Filled.ChevronRight, contentDescription = null)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { VipButton("Compléter", { onOpen(incomplete.first().first) }, compact = true) },
         dismissButton = { TextButton(onClick = onSendAnyway) { Text("Envoyer quand même") } },
     )
 }
@@ -384,6 +447,7 @@ fun MissingDialog(missing: List<String>, onDismiss: () -> Unit, onSendAnyway: ()
 @Composable
 fun ImportChoiceDialog(
     name: String,
+    reason: String,
     onFiche: () -> Unit,
     onDocument: () -> Unit,
     onCancel: () -> Unit,
@@ -400,11 +464,8 @@ fun ImportChoiceDialog(
                         Text(name, style = MaterialTheme.typography.bodyMedium, color = c.muted, maxLines = 1)
                     }
                 }
-                Text(
-                    "Ce n'est pas un modèle connu : les informations ne peuvent pas être reprises automatiquement. " +
-                        "Comment voulez-vous le traiter ?",
-                    style = MaterialTheme.typography.bodyLarge,
-                )
+                Text(reason, style = MaterialTheme.typography.bodyLarge)
+                Text("Comment voulez-vous le traiter ?", style = MaterialTheme.typography.bodyLarge, color = c.muted)
                 ChoiceCard(
                     Icons.Filled.EditNote,
                     "Remplir une fiche presse mobile",
@@ -414,7 +475,8 @@ fun ImportChoiceDialog(
                 ChoiceCard(
                     Icons.Filled.Draw,
                     "Écrire directement sur ce document",
-                    "Texte, date, croix et signature sur la page ; l'original suit en page 2, comme pour Mastra.",
+                    "Bon de livraison, document à faire signer : seule la signature du client est exigée. " +
+                        "L'original suit en page 2.",
                     onDocument,
                 )
                 TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.End)) { Text("Annuler") }

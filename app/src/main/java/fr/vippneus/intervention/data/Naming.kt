@@ -81,9 +81,15 @@ object Naming {
                 if (acc.none { it.contains(p, ignoreCase = true) }) acc += p
                 acc
             }
+            // Bon de livraison sans informations saisies : nom du document importé
+            .ifEmpty { listOfNotNull(sourceName(i)) }
         val body = (infos + date + initiales.trim()).filter { it.isNotEmpty() }.joinToString(" ")
         return sanitize(stripAccents(if (dept != null) "$dept- $body" else body))
     }
+
+    /** « bl_12345.pdf » -> « BL 12345 ». */
+    private fun sourceName(i: Intervention): String? =
+        i.source?.name?.substringBeforeLast('.')?.replace('_', ' ')?.trim()?.uppercase(Locale.FRANCE)?.takeIf { it.isNotEmpty() }
 
     /** « RÉSEAUX » -> « RESEAUX » : noms de fichiers sans accents, comme ceux utilisés jusqu'ici. */
     fun stripAccents(s: String): String =

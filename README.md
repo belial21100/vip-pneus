@@ -24,8 +24,8 @@ Deux traitements :
 |---|---|
 | **Bon de commande Manuloc** | Fiche presse mobile FPS pré-remplie : n° de commande, client mandataire (adresse de facturation), client utilisateur (adresse de livraison), n° de série et type d'engin, pneus AV/AR (dimensions, marque, profil, type, quantité) et quantités de prestations par taille de jante. Le bon de commande est joint après la fiche. |
 | **Mobile Service Continental** (Conti360°) | Fiche FPS pré-remplie : n° Mobile Service, rendez-vous, site (localisation), modèle, immatriculation, n° de flotte, pneus montés et prestations. Document joint après la fiche. |
-| **Feuille de tâche Mastra** (Interfit) | Écriture directe sur le document, seulement dans les cases que remplit le technicien : lecture du compteur, couple de serrage, monteur, date, « Reçu par » et signature, aux emplacements et tailles qu'il utilise (couple préconisé et horamètre de la demande affichés en aide). Le client final (lieu réel de l'intervention s'il diffère de « Livrer à ») s'écrit dans un encart au-dessus de « Commentaires ». Toute autre mention : texte libre posé sur la page. Page 2 : le document d'origine. |
-| Autre document | Au choix : fiche FPS avec le document joint, ou écriture libre sur le document. |
+| **Feuille de tâche Mastra** (Interfit) | Écriture directe sur le document, seulement dans les cases que remplit le technicien : lecture du compteur, couple de serrage, monteur, date, « Reçu par » et signature, aux emplacements et tailles qu'il utilise (couple préconisé et horamètre de la demande affichés en aide). Le client final (lieu réel de l'intervention s'il diffère de « Livrer à ») s'écrit dans un encart au-dessus de « Commentaires ». Toute autre mention : texte libre posé sur la page. Page 2 : le document d'origine. Si le PDF reçu a plusieurs pages (page 1 scannée ou déjà traitée), la feuille est cherchée dans les pages suivantes et seule sa page est gardée. |
+| Autre document (bon de livraison…) | L'application explique pourquoi il n'est pas reconnu (pas de texte lisible, modèle inconnu), puis au choix : fiche FPS avec le document joint, ou écriture libre sur le document. En écriture libre, **seule la signature du client est exigée** : aucun champ n'est imposé. |
 
 Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office.
 
@@ -34,13 +34,17 @@ Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office
 1. **Importer un PDF client** (bouton jaune de l'accueil, ou « Ouvrir avec / Partager →
    VIP Pneus » depuis la messagerie), ou **Nouvelle fiche vierge**.
 2. Les champs lus dans le document sont surlignés en jaune (✦) : les vérifier. Le cadre
-   **À compléter** liste ce qui manque encore (horamètre, serrage, signature…) ; un appui
-   mène directement au champ. L'aperçu de la page se met à jour en direct.
+   **À compléter** nomme chaque élément qui manque encore (horamètre, serrage, signature…)
+   avec ce qu'il faut faire ; un appui mène directement au champ. Les champs attendus
+   portent la mention « À compléter » et chaque rubrique une pastille « À compléter » ou
+   « Complet ». Ce qui manque est aussi rappelé dans la barre d'envoi, sur la liste des bons
+   et au-dessus de l'aperçu du PDF. L'aperçu de la page se met à jour en direct.
 3. **Faire signer** le client au doigt ou au stylet (son nom se saisit dans la même fenêtre).
 4. Au besoin, **Ajuster** : déplacer un texte, changer sa taille, ajouter une mention,
    une date, une croix ou une signature n'importe où sur la page (pincer pour zoomer).
 5. **Envoyer à la compta** (barre du bas, avec le nom du fichier) : s'il manque quelque
-   chose, l'application le signale avant ; le PDF est créé et la messagerie s'ouvre avec
+   chose, l'application dit précisément quoi avant l'envoi (y compris depuis la liste des
+   bons, et bon par bon pour un envoi groupé) ; le PDF est créé et la messagerie s'ouvre avec
    l'adresse de la comptabilité, l'objet et la pièce jointe. Plusieurs bons peuvent être
    envoyés ensemble (appui long dans la liste).
 
@@ -49,7 +53,8 @@ Des photos (bon papier, pneus…) et d'autres PDF peuvent être ajoutés à la s
 Nom de fichier par défaut, sur le modèle déjà utilisé :
 `02- LOC TEST ENTREPOT DUPONT 02000 LAON 1234567 24-08-2026 CE.pdf`
 (département, client, site, code postal, ville, n° de commande, date, initiales) ;
-pour Mastra : `54- MASTRA <livrer à> JobSheet_<n°> <date> <initiales>.pdf`.
+pour Mastra : `54- MASTRA <livrer à> JobSheet_<n°> <date> <initiales>.pdf` ;
+document sans informations saisies (bon de livraison) : nom du fichier reçu, date, initiales.
 
 ### Réglages
 

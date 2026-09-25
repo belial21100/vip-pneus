@@ -37,14 +37,31 @@ object FakeDocs {
         }
     }
 
-    private fun write(file: File, block: W.() -> Unit) {
+    private fun write(file: File, block: W.() -> Unit) = writePages(file, block)
+
+    /** Document de plusieurs pages, une fonction de dessin par page. */
+    private fun writePages(file: File, vararg pages: W.() -> Unit) {
         PDDocument().use { doc ->
-            val page = PDPage(PAGE)
-            doc.addPage(page)
-            PDPageContentStream(doc, page).use { W(it).block() }
+            pages.forEach { block ->
+                val page = PDPage(PAGE)
+                doc.addPage(page)
+                PDPageContentStream(doc, page).use { W(it).block() }
+            }
             doc.save(file)
         }
     }
+
+    /** Page sans texte (photo ou document scanné) : seulement des traits. */
+    private val SCAN: W.() -> Unit = {
+        listOf(100f, 300f, 500f).forEach { hLine(it, 40f, 555f) }
+        vLine(40f, 100f, 500f)
+    }
+
+    /** Document scanné : aucun texte lisible. */
+    fun scanned(file: File) = write(file, SCAN)
+
+    /** Feuille de tâche Mastra en page 2, derrière une page scannée (ex. bon déjà traité puis renvoyé). */
+    fun interfitAfterCover(file: File) = writePages(file, SCAN, INTERFIT)
 
     fun manuloc(file: File) = write(file) {
         t(45.4f, 78.2f, 24f, "Bon de commande")
@@ -118,7 +135,9 @@ object FakeDocs {
         t(230.1f, 581.4f, 8f, "Neuf")
     }
 
-    fun interfit(file: File) = write(file) {
+    fun interfit(file: File) = write(file, INTERFIT)
+
+    private val INTERFIT: W.() -> Unit = {
         t(242.5f, 43.3f, 11.7f, "Feuille de tâche")
         t(22f, 105.4f, 7.8f, "Date de création")
         t(84.9f, 105.4f, 7.8f, "01/09/2026")

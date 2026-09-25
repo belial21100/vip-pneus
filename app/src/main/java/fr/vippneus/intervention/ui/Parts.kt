@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import fr.vippneus.intervention.data.Attachment
 import fr.vippneus.intervention.data.AttachmentKind
+import fr.vippneus.intervention.data.Completion
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Naming
@@ -278,11 +279,16 @@ fun SignatureCard(
     focus: FocusRequester? = null,
     suggestions: List<String> = emptyList(),
 ) {
+    val signed = i.signature?.isEmpty == false
+    val missing = Completion.missing(i)
+    // Complet quand la signature et, s'il est exigé, le nom du signataire sont là
+    val complete = missing.none { it.key == Completion.SIGNATURE || it.key == nameKey }
     SectionCard(
         "Signature du client",
         icon = Icons.Filled.Draw,
-        subtitle = if (i.signature == null) "À faire en fin d'intervention" else "Signé",
+        subtitle = if (!signed) "À faire en fin d'intervention" else "Signé",
         modifier = modifier,
+        trailing = { SectionStatus(complete) },
     ) {
         if (nameKey != null) {
             VipField(
@@ -291,6 +297,7 @@ fun SignatureCard(
                 onValueChange = { vm.setValue(i.id, nameKey, it) },
                 auto = i.isAuto(nameKey),
                 suggestions = suggestions,
+                missing = missing.any { it.key == nameKey },
                 singleLine = i.type != InterventionType.FPS,
                 placeholder = namePlaceholder,
                 capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Words,
@@ -473,16 +480,20 @@ private fun AttachmentRow(
 
 /**
  * Action « Envoyer » : s'il manque des éléments, le technicien est prévenu avant
- * (compléter, ou envoyer quand même).
+ * (aller les compléter, ou envoyer quand même).
  */
 @Composable
-fun rememberSendAction(vm: AppViewModel, i: Intervention, todos: List<Todo>): () -> Unit {
+fun rememberSendAction(vm: AppViewModel, i: Intervention, todos: List<Todo>, onJump: (Todo) -> Unit): () -> Unit {
     val context = LocalContext.current
     var ask by remember { mutableStateOf(false) }
     val missing = todos.filterNot { it.done }
     if (ask) {
         MissingDialog(
-            missing = missing.map { it.label },
+            missing = missing,
+            onJump = { t ->
+                ask = false
+                onJump(t)
+            },
             onDismiss = { ask = false },
             onSendAnyway = {
                 ask = false

@@ -40,6 +40,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
@@ -603,8 +605,11 @@ fun VipField(
     focusRequester: FocusRequester? = null,
     /** Message d'erreur sous le champ (remplace [supporting]). */
     error: String? = null,
+    /** Champ attendu avant l'envoi : « À compléter » tant qu'il est vide. */
+    missing: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val toFill = missing && error == null && value.isBlank()
     val sparkle: @Composable () -> Unit = {
         Icon(
             Icons.Filled.AutoAwesome,
@@ -635,7 +640,27 @@ fun VipField(
                 auto -> sparkle
                 else -> null
             },
-            supportingText = (error ?: supporting)?.let { { Text(it) } },
+            supportingText = when {
+                error != null -> {
+                    { Text(error) }
+                }
+                // « À compléter », suivi de l'aide éventuelle (couple préconisé…)
+                toFill -> {
+                    val warning = Vip.colors.warning
+                    {
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(color = warning, fontWeight = FontWeight.SemiBold)) { append("À compléter") }
+                                if (supporting != null) append("  ·  $supporting")
+                            },
+                        )
+                    }
+                }
+                supporting != null -> {
+                    { Text(supporting) }
+                }
+                else -> null
+            },
             isError = error != null,
             shape = MaterialTheme.shapes.small,
             colors = vipFieldColors(auto),
@@ -731,13 +756,17 @@ fun ProgressRing(done: Int, total: Int, modifier: Modifier = Modifier, size: Dp 
     }
 }
 
-/** « À compléter » : ce qu'il manque sur le bon ; un appui mène au champ concerné. */
+/**
+ * « À compléter » : chaque élément manquant, avec ce qu'il faut faire et un accès direct ;
+ * ce qui est déjà fait est rappelé en dessous.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TodoPanel(todos: List<Todo>, onJump: (Todo) -> Unit, modifier: Modifier = Modifier) {
     if (todos.isEmpty()) return
     val c = Vip.colors
     val missing = todos.filterNot { it.done }
+    val done = todos.filter { it.done }
     val complete = missing.isEmpty()
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -747,15 +776,18 @@ fun TodoPanel(todos: List<Todo>, onJump: (Todo) -> Unit, modifier: Modifier = Mo
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ProgressRing(todos.size - missing.size, todos.size)
+                ProgressRing(done.size, todos.size)
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (complete) "Tout est rempli" else "À compléter", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (complete) "Tout est rempli" else "À compléter avant l'envoi",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
                     Text(
                         when (missing.size) {
                             0 -> "Le bon est prêt à être envoyé à la comptabilité."
-                            1 -> "Il reste 1 élément : touchez-le pour y aller."
-                            else -> "Il reste ${missing.size} éléments : touchez-en un pour y aller."
+                            1 -> "Il manque 1 élément : touchez-le pour y aller."
+                            else -> "Il manque ${missing.size} éléments : touchez-en un pour y aller."
                         },
                         style = MaterialTheme.typography.bodyMedium,
                         color = c.muted,
@@ -763,103 +795,162 @@ fun TodoPanel(todos: List<Todo>, onJump: (Todo) -> Unit, modifier: Modifier = Mo
                 }
             }
             if (!complete) {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    missing.forEach { t -> TodoChip(t) { onJump(t) } }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    missing.forEach { t -> MissingRow(t) { onJump(t) } }
+                }
+                if (done.isNotEmpty()) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Déjà fait :", style = MaterialTheme.typography.bodySmall, color = c.muted)
+                        done.forEach { t ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = c.success, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(t.label, style = MaterialTheme.typography.bodySmall, color = c.muted)
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+/** Élément manquant : libellé, ce qu'il faut faire, action. */
 @Composable
-private fun TodoChip(t: Todo, onClick: () -> Unit) {
+private fun MissingRow(t: Todo, onClick: () -> Unit) {
     val c = Vip.colors
-    Surface(onClick = onClick, shape = CircleShape, color = c.accentSoft, contentColor = c.onAccentSoft) {
+    val signature = t.key == Completion.SIGNATURE
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+        color = c.accentSoft,
+        contentColor = c.onAccentSoft,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
         Row(
             Modifier
-                .heightIn(min = 40.dp)
-                .padding(start = 12.dp, end = 16.dp),
+                .heightIn(min = 56.dp)
+                .padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                if (t.key == Completion.SIGNATURE) Icons.Filled.Draw else Icons.Filled.EditNote,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-            )
+            Icon(if (signature) Icons.Filled.Draw else Icons.Filled.EditNote, contentDescription = null, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(t.label, style = MaterialTheme.typography.titleSmall)
+                if (t.hint.isNotEmpty()) {
+                    Text(t.hint, style = MaterialTheme.typography.bodySmall, color = c.onAccentSoft.copy(alpha = 0.8f))
+                }
+            }
             Spacer(Modifier.width(8.dp))
-            Text(t.label, style = MaterialTheme.typography.labelLarge)
+            Text(if (signature) "Faire signer" else "Remplir", style = MaterialTheme.typography.labelLarge)
+            Icon(Icons.Filled.ChevronRight, contentDescription = null, modifier = Modifier.size(20.dp))
         }
     }
 }
 
-/** Barre d'envoi en bas des écrans de saisie : nom du fichier, aperçu, envoi. */
+/** Pastille d'état d'une section : à compléter, ou complète. */
+@Composable
+fun SectionStatus(complete: Boolean) {
+    val c = Vip.colors
+    Row(
+        Modifier
+            .background(if (complete) c.successSoft else c.accentSoft, CircleShape)
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            if (complete) Icons.Filled.Check else Icons.Filled.EditNote,
+            contentDescription = null,
+            tint = if (complete) c.success else c.onAccentSoft,
+            modifier = Modifier.size(14.dp),
+        )
+        Spacer(Modifier.width(5.dp))
+        Text(
+            if (complete) "Complet" else "À compléter",
+            style = MaterialTheme.typography.labelMedium,
+            color = if (complete) c.success else c.onAccentSoft,
+        )
+    }
+}
+
+/**
+ * Barre d'envoi en bas des écrans de saisie : ce qui manque (touchez pour y aller),
+ * nom du fichier (touchez pour le changer), aperçu, envoi.
+ */
 @Composable
 fun SendBar(
     fileName: String,
-    missing: Int,
+    missing: List<String>,
     onRename: () -> Unit,
     onPreview: () -> Unit,
     onSend: () -> Unit,
+    onMissing: () -> Unit,
     modifier: Modifier = Modifier,
-    compact: Boolean = false,
 ) {
     val c = Vip.colors
     Surface(modifier.fillMaxWidth(), color = c.card, shadowElevation = 10.dp) {
-        BoxWithConstraints {
-            // Rappel « éléments manquants » seulement s'il reste de la place pour le nom du fichier
-            val showMissing = missing > 0 && !compact && maxWidth >= 1100.dp
-            Column {
-                HorizontalDivider(color = c.cardBorder)
-                Row(
+        Column {
+            HorizontalDivider(color = c.cardBorder)
+            Row(
+                Modifier
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconBadge(Icons.Filled.PictureAsPdf, background = c.dangerSoft, tint = c.danger)
+                Column(
                     Modifier
-                        .navigationBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .weight(1f)
+                        .padding(start = 6.dp),
                 ) {
-                    IconBadge(Icons.Filled.PictureAsPdf, background = c.dangerSoft, tint = c.danger)
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .padding(start = 6.dp)
-                            .clip(MaterialTheme.shapes.small)
-                            .clickable(onClick = onRename)
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    ) {
-                        Text("PDF pour la comptabilité", style = MaterialTheme.typography.labelMedium, color = c.muted)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "$fileName.pdf",
-                                style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false),
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Icon(Icons.Filled.Edit, contentDescription = "Renommer le fichier", tint = c.muted, modifier = Modifier.size(16.dp))
-                        }
-                    }
-                    if (showMissing) {
+                    if (missing.isNotEmpty()) {
                         Row(
                             Modifier
-                                .padding(horizontal = 8.dp)
-                                .background(c.warningSoft, CircleShape)
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable(onClick = onMissing)
+                                .padding(horizontal = 8.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(Icons.Filled.Warning, contentDescription = null, tint = c.warning, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Filled.Warning, contentDescription = null, tint = c.warning, modifier = Modifier.size(15.dp))
                             Spacer(Modifier.width(6.dp))
                             Text(
-                                if (missing == 1) "1 élément manquant" else "$missing éléments manquants",
+                                "Manque : " + missing.joinToString(", "),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = c.warning,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
+                    } else {
+                        Text(
+                            "PDF pour la comptabilité",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = c.muted,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                        )
                     }
-                    Spacer(Modifier.width(8.dp))
-                    VipButton("Aperçu PDF", onPreview, icon = Icons.Filled.Visibility, tone = Tone.GHOST)
-                    Spacer(Modifier.width(10.dp))
-                    VipButton("Envoyer à la compta", onSend, icon = Icons.AutoMirrored.Filled.Send)
+                    Row(
+                        Modifier
+                            .clip(MaterialTheme.shapes.small)
+                            .clickable(onClick = onRename)
+                            .padding(horizontal = 8.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "$fileName.pdf",
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Filled.Edit, contentDescription = "Renommer le fichier", tint = c.muted, modifier = Modifier.size(16.dp))
+                    }
                 }
+                Spacer(Modifier.width(8.dp))
+                VipButton("Aperçu PDF", onPreview, icon = Icons.Filled.Visibility, tone = Tone.GHOST)
+                Spacer(Modifier.width(10.dp))
+                VipButton("Envoyer à la compta", onSend, icon = Icons.AutoMirrored.Filled.Send)
             }
         }
     }

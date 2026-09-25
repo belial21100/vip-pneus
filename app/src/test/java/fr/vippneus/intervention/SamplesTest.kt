@@ -13,6 +13,7 @@ import fr.vippneus.intervention.importer.ClientImport
 import fr.vippneus.intervention.importer.ImportPlan
 import fr.vippneus.intervention.pdf.PdfExporter
 import fr.vippneus.intervention.pdf.PdfPages
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -24,7 +25,8 @@ import java.io.File
 /**
  * Vérification sur de vrais documents clients, conservés hors du dépôt (données personnelles).
  * Lancer avec la variable d'environnement VIP_SAMPLES_DIR = dossier contenant les PDF.
- * Pour chaque PDF, on analyse sa dernière page seule (le document tel qu'envoyé par le client) ;
+ * Pour chaque PDF, on analyse le fichier entier, puis sa dernière page seule (le document tel
+ * qu'envoyé par le client) ;
  * les PDF remplis automatiquement sont écrits dans app/build/test-output/samples.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -41,6 +43,14 @@ class SamplesTest {
         val out = File(System.getProperty("user.dir"), "build/test-output/samples").apply { mkdirs() }
 
         dir!!.listFiles { f -> f.name.endsWith(".pdf", ignoreCase = true) }!!.sorted().forEachIndexed { index, pdf ->
+            // Le PDF entier, tel que reçu (éventuellement déjà traité : page remplie puis original)
+            val whole = ClientImport.inspect(pdf, "Chris.E", "25/09/26")
+            println(
+                "===== [$index/entier] ${pdf.name} -> ${whole.plan.javaClass.simpleName} (${whole.plan.docType}), " +
+                    "page ${whole.page + 1}" + (whole.reason?.let { " : $it" } ?: ""),
+            )
+            if (pdf.name.contains("MASTRA", ignoreCase = true)) assertTrue(whole.plan is ImportPlan.Feuille)
+
             val variants = mutableListOf<Pair<String, File>>()
             PDDocument.load(pdf).use { doc ->
                 val last = File(out, "src-$index-client.pdf")

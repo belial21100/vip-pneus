@@ -4,6 +4,7 @@ import fr.vippneus.intervention.data.DocKeys
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Naming
+import fr.vippneus.intervention.data.SourceDoc
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -75,6 +76,20 @@ class NamingTest {
             ),
         )
         assertEquals("54- MASTRA ESAT DU PARC (VILLE-TEST 54000) JobSheet_7654321 27-08-2026 CE", Naming.defaultFileName(i, "CE"))
+    }
+
+    @Test
+    fun nomDeFichier_bonDeLivraisonSansInformations() {
+        // Rien de saisi : le nom du document importé remplace le client
+        val i = Intervention(
+            id = "x", type = InterventionType.DOCUMENT, createdAt = 0L,
+            values = mapOf(DocKeys.DATE to "25/09/26"),
+            source = SourceDoc("source.pdf", "bl_livraison 0042.pdf", 1, 595f, 842f),
+        )
+        assertEquals("BL LIVRAISON 0042 25-09-2026 CE", Naming.defaultFileName(i, "CE"))
+        // Dès qu'un client est saisi, il reprend sa place
+        val client = i.copy(values = i.values + (DocKeys.CLIENT to "Client Test"))
+        assertEquals("CLIENT TEST 25-09-2026 CE", Naming.defaultFileName(client, "CE"))
     }
 
     @Test

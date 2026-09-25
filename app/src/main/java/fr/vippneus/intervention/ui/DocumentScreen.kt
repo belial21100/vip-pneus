@@ -62,31 +62,27 @@ fun DocumentScreen(vm: AppViewModel, id: String) {
     val nav = rememberFormNav()
     val editor = remember(id) { EditorState() }
     val todos = remember(i) { Completion.todos(i) }
-    val send = rememberSendAction(vm, i, todos)
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var signing by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
-    var infosOpen by rememberSaveable { mutableStateOf(i.value(DocKeys.CLIENT).isBlank()) }
+    var infosOpen by rememberSaveable { mutableStateOf(false) }
     val signerKey = i.template?.fields?.firstOrNull { it.key.endsWith("recuPar") }?.key
 
+    /** Emmène à l'élément manquant : case de la feuille, ou signature. */
     fun jump(t: Todo) {
-        when (t.key) {
-            Completion.SIGNATURE -> {
+        when {
+            t.key == Completion.SIGNATURE && i.template?.signature != null -> {
                 tab = 0
                 nav.go("signature")
                 signing = true
             }
-            Completion.PAGE -> {
+            // Document sans modèle (bon de livraison…) : la signature se pose sur la page
+            t.key == Completion.SIGNATURE -> {
                 tab = 1
                 editor.selected = null
-                editor.tool = Tool.TEXT
+                editor.tool = Tool.SIGNATURE
             }
-            DocKeys.CLIENT -> {
-                tab = 0
-                infosOpen = true
-                nav.go("infos", t.key)
-            }
-            signerKey -> {
+            t.key == signerKey -> {
                 tab = 0
                 nav.go("signature", t.key)
             }
@@ -96,6 +92,7 @@ fun DocumentScreen(vm: AppViewModel, id: String) {
             }
         }
     }
+    val send = rememberSendAction(vm, i, todos, ::jump)
 
     BoxWithConstraints(
         Modifier
@@ -136,11 +133,11 @@ fun DocumentScreen(vm: AppViewModel, id: String) {
             }
             SendBar(
                 fileName = Naming.fileName(i, settings.initiales),
-                missing = todos.count { !it.done },
+                missing = todos.filterNot { it.done }.map { it.label },
                 onRename = { renaming = true },
                 onPreview = { scope.launch { if (vm.generate(id) != null) vm.navigate(Screen.Viewer(id)) } },
                 onSend = send,
-                compact = !wide,
+                onMissing = { todos.firstOrNull { !it.done }?.let(::jump) },
             )
         }
     }
@@ -235,11 +232,16 @@ private fun DocumentForm(
         TodoPanel(todos, onJump)
 
         if (t != null) {
+            val fields = t.fields.filter { it.key != signerKey }
+            val missing = Completion.missingFields(i)
             SectionCard(
                 t.name, nav.anchor("feuille"), icon = Icons.Filled.EditNote,
                 subtitle = "Les cases que remplit le technicien, écrites à leur place sur la feuille",
+                trailing = if (fields.any { it.required }) {
+                    { SectionStatus(fields.none { it.key in missing }) }
+                } else null,
             ) {
-                TemplateFields(vm, i, t.fields.filter { it.key != signerKey }, nav)
+                TemplateFields(vm, i, fields, nav, missing)
                 Text(
                     "Autre chose à écrire ? Touchez « Texte » au-dessus de la page, puis l'endroit voulu.",
                     style = MaterialTheme.typography.bodySmall,
@@ -281,8 +283,8 @@ private fun DocumentForm(
             InfoBanner(
                 icon = Icons.Filled.TouchApp,
                 title = "Écrivez directement sur la page",
-                text = "Choisissez Texte, Date, Croix ou Signature au-dessus de la page, puis touchez l'endroit voulu. " +
-                    "Glissez un élément pour le déplacer.",
+                text = "Seule la signature du client est exigée. Choisissez Texte, Date, Croix ou Signature " +
+                    "au-dessus de la page, puis touchez l'endroit voulu ; glissez un élément pour le déplacer.",
                 background = Vip.colors.infoSoft,
                 content = Vip.colors.info,
             )
@@ -326,7 +328,7 @@ private fun DocumentForm(
 
 /** Champs de la feuille du client, deux par ligne quand ils sont courts. */
 @Composable
-private fun TemplateFields(vm: AppViewModel, i: Intervention, fields: List<PlacedField>, nav: FormNav) {
+private fun TemplateFields(vm: AppViewModel, i: Intervention, fields: List<PlacedField>, nav: FormNav, missing: Set<String>) {
     fun wide(f: PlacedField) = f.maxLines > 1 || f.right - f.left > 250f
     val rows = mutableListOf<List<PlacedField>>()
     var pending: PlacedField? = null
@@ -349,14 +351,14 @@ private fun TemplateFields(vm: AppViewModel, i: Intervention, fields: List<Place
 
     rows.forEach { row ->
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            row.forEach { f -> TemplateField(vm, i, f, nav, Modifier.weight(1f)) }
+            row.forEach { f -> TemplateField(vm, i, f, nav, f.key in missing, Modifier.weight(1f)) }
             if (row.size == 1 && !wide(row[0])) Spacer(Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun TemplateField(vm: AppViewModel, i: Intervention, f: PlacedField, nav: FormNav, modifier: Modifier) {
+private fun TemplateField(vm: AppViewModel, i: Intervention, f: PlacedField, nav: FormNav, missing: Boolean, modifier: Modifier) {
     val v = i.value(f.key)
     val k = f.key.substringAfterLast('.')
     VipField(
@@ -374,6 +376,7 @@ private fun TemplateField(vm: AppViewModel, i: Intervention, f: PlacedField, nav
             { DatePickerIcon(v) { vm.setValue(i.id, f.key, it) } }
         } else null,
         focusRequester = nav.focus(f.key),
+        missing = missing,
     )
 }
 

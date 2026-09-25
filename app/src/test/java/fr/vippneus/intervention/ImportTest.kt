@@ -154,5 +154,33 @@ class ImportTest {
         val plan = analyze(f)
         assertTrue(plan is ImportPlan.Inconnu)
         assertEquals("Chris.E", (plan as ImportPlan.Inconnu).values[K.MONTEUR])
+        // La raison est expliquée au technicien
+        val reason = ClientImport.inspect(f, "Chris.E", "25/09/26").reason.orEmpty()
+        assertTrue(reason, reason.contains("pas un modèle connu"))
+    }
+
+    @Test
+    fun documentScanne_raisonExpliquee() {
+        val f = File(out, "scan.pdf").also { FakeDocs.scanned(it) }
+        val r = ClientImport.inspect(f, "Chris.E", "25/09/26")
+        assertTrue(r.plan is ImportPlan.Inconnu)
+        assertTrue(r.reason.orEmpty(), r.reason.orEmpty().contains("pas de texte lisible"))
+    }
+
+    @Test
+    fun feuilleMastraEnPage2_trouveeEtExtraite() {
+        // Page 1 sans texte (feuille déjà traitée, photo...), feuille de tâche en page 2
+        val f = File(out, "mastra-2-pages.pdf").also { FakeDocs.interfitAfterCover(it) }
+        val r = ClientImport.inspect(f, "Chris.E", "25/09/26")
+        assertEquals(1, r.page)
+        val plan = r.plan as ImportPlan.Feuille
+        assertEquals("Feuille de tâche Mastra", plan.docType)
+        assertEquals("JobSheet_1234567", plan.values[DocKeys.REFERENCE])
+
+        // Seule cette page est gardée comme document du client
+        val single = File(out, "mastra-page-2.pdf")
+        PdfPages.extractPage(f, r.page, single)
+        assertEquals(1, PdfPages.pageCount(single))
+        assertTrue(ClientImport.analyze(single, "Chris.E", "25/09/26") is ImportPlan.Feuille)
     }
 }

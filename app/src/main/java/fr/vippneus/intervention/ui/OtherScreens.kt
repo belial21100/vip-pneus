@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,10 +26,13 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -42,6 +47,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -99,7 +105,8 @@ fun ViewerScreen(vm: AppViewModel, id: String) {
         value = if (file == null) 0 else withContext(Dispatchers.IO) { runCatching { PdfPages.pageCount(file) }.getOrDefault(0) }
     }
     val todos = remember(i) { i?.let { Completion.todos(it) }.orEmpty() }
-    val send: () -> Unit = if (i != null) rememberSendAction(vm, i, todos) else ({ })
+    val missing = todos.filterNot { it.done }
+    val send: () -> Unit = if (i != null) rememberSendAction(vm, i, todos) { vm.editIntervention(i) } else ({ })
 
     Column(
         Modifier
@@ -126,6 +133,9 @@ fun ViewerScreen(vm: AppViewModel, id: String) {
                 VipButton("Envoyer à la compta", send, icon = Icons.AutoMirrored.Filled.Send, compact = true)
             }
         }
+        if (i != null && missing.isNotEmpty()) {
+            MissingStrip(missing.map { it.label }) { vm.editIntervention(i) }
+        }
         if (file == null || !file.exists()) {
             Box(
                 Modifier
@@ -137,6 +147,32 @@ fun ViewerScreen(vm: AppViewModel, id: String) {
             }
         } else {
             PdfPagesList(file, count, Modifier.weight(1f))
+        }
+    }
+}
+
+/** Rappel de ce qui manque encore sur le bon, au-dessus de l'aperçu du PDF. */
+@Composable
+private fun MissingStrip(labels: List<String>, onComplete: () -> Unit) {
+    val c = Vip.colors
+    Surface(color = c.warningSoft, contentColor = c.warning) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(
+                "Manque : " + labels.joinToString(", "),
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Spacer(Modifier.width(12.dp))
+            VipButton("Compléter le bon", onComplete, icon = Icons.Filled.EditNote, tone = Tone.GHOST, compact = true)
         }
     }
 }

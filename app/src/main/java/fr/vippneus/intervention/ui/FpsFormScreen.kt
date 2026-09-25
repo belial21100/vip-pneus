@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,6 +59,9 @@ import kotlinx.coroutines.launch
 
 /** Accès simplifié aux champs du formulaire. */
 private class Form(val vm: AppViewModel, val i: Intervention, val suggestions: Map<String, List<String>>, val nav: FormNav) {
+    /** Champs signalés « À compléter ». */
+    val missing = Completion.missingFields(i)
+
     fun value(key: String) = i.value(key)
     fun set(key: String, v: String) = vm.setValue(i.id, key, v)
 }
@@ -91,6 +95,7 @@ private fun Form.Field(
         suffix = suffix,
         trailing = trailing,
         focusRequester = nav.focus(key),
+        missing = key in missing,
     )
 }
 
@@ -130,17 +135,18 @@ fun FpsFormScreen(vm: AppViewModel, id: String) {
     val scope = rememberCoroutineScope()
     val nav = rememberFormNav()
     val todos = remember(i) { Completion.todos(i) }
-    val send = rememberSendAction(vm, i, todos)
     var tab by rememberSaveable { mutableIntStateOf(0) }
     var signing by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     val form = Form(vm, i, suggestions, nav)
 
+    /** Emmène au champ manquant (ou ouvre la signature). */
     fun jump(t: Todo) {
         tab = 0
         nav.go(sectionOf(t.key), t.key)
         if (t.key == Completion.SIGNATURE) signing = true
     }
+    val send = rememberSendAction(vm, i, todos, ::jump)
 
     BoxWithConstraints(
         Modifier
@@ -178,11 +184,11 @@ fun FpsFormScreen(vm: AppViewModel, id: String) {
             }
             SendBar(
                 fileName = Naming.fileName(i, settings.initiales),
-                missing = todos.count { !it.done },
+                missing = todos.filterNot { it.done }.map { it.label },
                 onRename = { renaming = true },
                 onPreview = { scope.launch { if (vm.generate(id) != null) vm.navigate(Screen.Viewer(id)) } },
                 onSend = send,
-                compact = !wide,
+                onMissing = { todos.firstOrNull { !it.done }?.let(::jump) },
             )
         }
     }
@@ -225,6 +231,12 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
     val i = form.i
     val nav = form.nav
     val incomplete = todos.filterNot { it.done }.map { sectionOf(it.key) }.toSet()
+    // Pastille « À compléter » / « Complet » des sections qui ont des éléments attendus
+    val expected = todos.map { sectionOf(it.key) }.toSet()
+    fun status(section: String): (@Composable RowScope.() -> Unit)? =
+        if (section in expected) {
+            { SectionStatus(section !in incomplete) }
+        } else null
     Column(modifier.fillMaxHeight()) {
         SectionNavRow(SECTIONS, incomplete) { nav.go(it) }
         Column(
@@ -239,7 +251,7 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
             i.recognized?.let { RecognizedBanner(it) }
             TodoPanel(todos, onJump)
 
-            SectionCard("Commande et client", nav.anchor("client"), icon = Icons.AutoMirrored.Filled.Assignment) {
+            SectionCard("Commande et client", nav.anchor("client"), icon = Icons.AutoMirrored.Filled.Assignment, trailing = status("client")) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     form.Field(K.CLIENT_MANDATAIRE, "Client mandataire", Modifier.weight(1.4f), caps = KeyboardCapitalization.Characters)
                     form.Field(K.NUMERO_COMMANDE, "N° de commande", Modifier.weight(1f), caps = KeyboardCapitalization.Characters)
@@ -263,7 +275,7 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
                 }
             }
 
-            SectionCard("Matériel", nav.anchor("materiel"), icon = Icons.Filled.PrecisionManufacturing) {
+            SectionCard("Matériel", nav.anchor("materiel"), icon = Icons.Filled.PrecisionManufacturing, trailing = status("materiel")) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     form.Field(K.MARQUE, "Marque", Modifier.weight(1f), caps = KeyboardCapitalization.Words)
                     form.Field(K.TYPE, "Type", Modifier.weight(1f), caps = KeyboardCapitalization.Characters)
@@ -275,7 +287,7 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
                 }
             }
 
-            SectionCard("Pneus fournis", nav.anchor("pneus"), icon = Icons.Filled.TireRepair) {
+            SectionCard("Pneus fournis", nav.anchor("pneus"), icon = Icons.Filled.TireRepair, trailing = status("pneus")) {
                 PneuBlock(form, "av", "Pneus avant (AV) fournis")
                 SubHeader("Arrière") {
                     VipButton(
@@ -299,7 +311,10 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
                 PneuBlock(form, "ar", "Pneus arrière (AR) fournis")
             }
 
-            SectionCard("Prestations", nav.anchor("prestations"), icon = Icons.Filled.Handyman, subtitle = "Quantités par taille de jante") {
+            SectionCard(
+                "Prestations", nav.anchor("prestations"), icon = Icons.Filled.Handyman,
+                subtitle = "Quantités par taille de jante", trailing = status("prestations"),
+            ) {
                 PrestationsGrid(form)
                 SubHeader("Déplacement")
                 YesNo(
@@ -313,6 +328,7 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
             SectionCard(
                 "Serrage des roues", nav.anchor("serrage"), icon = Icons.Filled.Speed,
                 subtitle = "Couple en Nm ; la remarque s'écrit à droite de « Nm »",
+                trailing = status("serrage"),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     form.Field(K.SERRAGE_AV, "AV", Modifier.weight(1f), keyboard = KeyboardType.Number, suffix = "Nm")

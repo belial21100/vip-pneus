@@ -56,7 +56,15 @@ sealed interface Screen {
 }
 
 /** Document non reconnu, en attente du choix du technicien. */
-data class PendingImport(val id: String, val pdf: File, val name: String, val info: PdfPages.Info, val values: Map<String, String>)
+data class PendingImport(
+    val id: String,
+    val pdf: File,
+    val name: String,
+    val info: PdfPages.Info,
+    val values: Map<String, String>,
+    /** Pourquoi le document n'est pas reconnu. */
+    val reason: String,
+)
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
@@ -127,6 +135,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openIntervention(i: Intervention) {
         navigate(if (i.type == InterventionType.FPS) Screen.Fps(i.id) else Screen.Document(i.id))
+    }
+
+    /** Depuis l'aperçu du PDF : retour à la saisie du bon, pour compléter ce qui manque. */
+    fun editIntervention(i: Intervention) {
+        val edit = if (i.type == InterventionType.FPS) Screen.Fps(i.id) else Screen.Document(i.id)
+        if (backStack.size > 1 && backStack.last() is Screen.Viewer) backStack.removeAt(backStack.lastIndex)
+        if (backStack.last() != edit) backStack.add(edit)
     }
 
     fun message(text: String) {
@@ -269,7 +284,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun friendlyError(e: Throwable): String = when (e) {
         is InvalidPasswordException -> "ce PDF est protégé par un mot de passe"
-        is ExportException -> e.message ?: "erreur"
+        is ExportException -> e.message ?: "erreur lors de la création du PDF"
+        is java.io.FileNotFoundException -> "fichier introuvable ou inaccessible"
+        is SecurityException -> "accès au fichier refusé"
+        is java.io.IOException -> "fichier illisible ou endommagé" + (e.message?.let { " ($it)" } ?: "")
         else -> e.message ?: e.javaClass.simpleName
     }
 
@@ -299,12 +317,22 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 val mime = mimeHint?.takeIf { it != "*/*" } ?: resolver.getType(uri)
                 val name = InterventionRepository.displayName(resolver, uri) ?: "document.pdf"
                 val image = isImage(mime, name)
-                val (pdf, info, plan) = withContext(Dispatchers.IO) {
-                    val pdf = copyAsPdf(id, uri, name, image)
-                    val info = PdfPages.info(pdf)
-                    Triple(pdf, info, analyze(pdf))
+                val (pdf, info, result) = withContext(Dispatchers.IO) {
+                    var pdf = copyAsPdf(id, uri, name, image)
+                    val result = ClientImport.inspect(pdf, _settings.value.technicien, Naming.today())
+                    if (result.page > 0) {
+                        // Seule la page de la feuille est gardée : elle devient le document du client
+                        val single = repo.newFile(id, "source", "pdf")
+                        PdfPages.extractPage(pdf, result.page, single)
+                        pdf.delete()
+                        pdf = single
+                    }
+                    Triple(pdf, PdfPages.info(pdf), result)
                 }
-                applyPlan(id, pdf, name, info, plan)
+                applyPlan(id, pdf, name, info, result.plan, result.reason)
+                if (result.page > 0) {
+                    message("« ${result.plan.docType} » trouvée en page ${result.page + 1} : seule cette page est utilisée.")
+                }
             } catch (e: Exception) {
                 withContext(Dispatchers.IO) { repo.delete(id) }
                 message("Import impossible : ${friendlyError(e)}")
@@ -333,7 +361,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         )
     }
 
-    private fun applyPlan(id: String, pdf: File, name: String, info: PdfPages.Info, plan: ImportPlan) {
+    private fun applyPlan(id: String, pdf: File, name: String, info: PdfPages.Info, plan: ImportPlan, reason: String?) {
         when (plan) {
             is ImportPlan.Fiche -> {
                 add(fpsWithDocument(id, pdf, name, info, plan.values, plan.docType))
@@ -355,7 +383,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 )
                 navigate(Screen.Document(id))
             }
-            is ImportPlan.Inconnu -> _pendingImport.value = PendingImport(id, pdf, name, info, plan.values)
+            is ImportPlan.Inconnu -> _pendingImport.value = PendingImport(
+                id, pdf, name, info, plan.values,
+                reason ?: "Ce n'est pas un modèle connu : les informations ne peuvent pas être reprises automatiquement.",
+            )
         }
     }
 
@@ -504,7 +535,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             update(id, touch = false) { it.copy(generatedAt = System.currentTimeMillis()) }
             file
         } catch (e: Exception) {
-            message(friendlyError(e))
+            // Précise le bon concerné (utile quand plusieurs bons sont envoyés ensemble)
+            val why = if (e is ExportException) friendlyError(e) else "erreur lors de la création du PDF (${friendlyError(e)})"
+            message("PDF de « ${Naming.title(i)} » non créé : ${why.replaceFirstChar { it.lowercase() }}")
             null
         } finally {
             _busy.value = null

@@ -13,7 +13,9 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
@@ -22,6 +24,9 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ApplicationProvider
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
+import fr.vippneus.intervention.data.Completion
+import fr.vippneus.intervention.data.Overlay
+import fr.vippneus.intervention.data.OverlayKind
 import fr.vippneus.intervention.data.Settings
 import fr.vippneus.intervention.data.SettingsStore
 import fr.vippneus.intervention.data.SignatureData
@@ -29,6 +34,7 @@ import fr.vippneus.intervention.pdf.FpsTemplate.K
 import fr.vippneus.intervention.ui.AppRoot
 import fr.vippneus.intervention.ui.AppViewModel
 import fr.vippneus.intervention.ui.Screen
+import fr.vippneus.intervention.ui.Tool
 import fr.vippneus.intervention.ui.VipTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -363,6 +369,69 @@ class UiFlowTest {
         waitFor { vm.pendingImport.value != null }
         idle()
         snap("12-document-non-reconnu")
+        // La raison est affichée
+        compose.onNodeWithText("pas un modèle connu", substring = true).assertExists()
+    }
+
+    @Test
+    fun bonDeLivraison_seuleLaSignatureEstExigee() {
+        val vm = newVm()
+        configure(vm)
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val src = File(app.cacheDir, "Bon de livraison 0042.pdf").also { FakeDocs.other(it) }
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        vm.importClient(Uri.fromFile(src))
+        waitFor { vm.pendingImport.value != null }
+        compose.onNodeWithText("Écrire directement sur ce document").performClick()
+        waitFor { vm.backStack.last() is Screen.Document }
+        val id = (vm.backStack.last() as Screen.Document).id
+        idle(200)
+        snap("18-bon-de-livraison")
+        // Un seul élément attendu : la signature, nommé en clair
+        val i = vm.interventions.value.first { it.id == id }
+        assertEquals(listOf("Signature du client"), Completion.missing(i).map { it.label })
+        compose.onNodeWithText("Manque : Signature du client").assertExists()
+        compose.onNodeWithText("BON DE LIVRAISON 0042", substring = true).assertExists()
+
+        // « Faire signer » : l'outil Signature est choisi sur la page
+        compose.onNode(hasText("Signature du client") and hasClickAction()).performClick()
+        idle(4)
+        compose.onNodeWithText(Tool.SIGNATURE.hint).assertExists()
+        snap("18b-bon-de-livraison-signature")
+
+        vm.update(id) {
+            it.copy(overlays = it.overlays + Overlay("s", OverlayKind.SIGNATURE, 380f, 700f, width = 150f, height = 61f, signature = signature()))
+        }
+        idle(40)
+        compose.onNodeWithText("Tout est rempli").assertExists()
+        snap("18c-bon-de-livraison-signe")
+    }
+
+    @Test
+    fun feuilleMastraEnPage2() {
+        val vm = newVm()
+        configure(vm)
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        // PDF de deux pages : page 1 scannée, feuille de tâche en page 2
+        val src = File(app.cacheDir, "Feuille de tache 1234567 traitee.pdf").also { FakeDocs.interfitAfterCover(it) }
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        val messages = mutableListOf<String>()
+        val job = CoroutineScope(Dispatchers.Main).launch { vm.messages.collect { messages += it } }
+        vm.importClient(Uri.fromFile(src))
+        waitFor { vm.backStack.last() is Screen.Document }
+        idle(10)
+        job.cancel()
+        val i = vm.interventions.value.first { it.id == (vm.backStack.last() as Screen.Document).id }
+        assertEquals("Feuille de tâche Mastra", i.recognized)
+        assertEquals(1, i.source?.pageCount)
+        assertTrue("Messages : $messages", messages.any { it.contains("trouvée en page 2") })
+        // Les cases du technicien sont nommées une à une (monteur et date remplis d'office)
+        assertEquals(
+            listOf("Lecture du compteur", "Couple de serrage", "Reçu par", "Signature du client"),
+            Completion.missing(i).map { it.label },
+        )
+        idle(200)
+        snap("09d-mastra-page-2")
     }
 
     @Test
@@ -395,5 +464,16 @@ class UiFlowTest {
         compose.setContent { VipTheme { AppRoot(vm) } }
         idle()
         snap("13-accueil-plusieurs-bons")
+        // Ce qui manque est écrit sur chaque carte
+        compose.onAllNodesWithText("À compléter :", substring = true)[0].assertExists()
+
+        // Envoi groupé : les bons incomplets sont listés avec ce qui leur manque
+        compose.onNodeWithText("Garage Exemple").performTouchInput { longClick() }
+        compose.onNodeWithText("MANUTENTION TEST – Plateforme Test").performClick()
+        idle(4)
+        compose.onAllNodesWithText("Envoyer à la compta").onLast().performClick()
+        idle(4)
+        compose.onNodeWithText("2 bons incomplets sur 2").assertExists()
+        snap("13b-envoi-groupe-incomplet")
     }
 }

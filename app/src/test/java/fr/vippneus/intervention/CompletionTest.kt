@@ -1,7 +1,6 @@
 package fr.vippneus.intervention
 
 import fr.vippneus.intervention.data.Completion
-import fr.vippneus.intervention.data.DocKeys
 import fr.vippneus.intervention.data.DocTemplate
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
@@ -69,14 +68,35 @@ class CompletionTest {
     }
 
     @Test
-    fun documentQuelconque_pageEtClient() {
+    fun bonDeLivraison_seuleLaSignatureEstExigee() {
         val i = Intervention("x", InterventionType.DOCUMENT, 0L)
-        assertEquals(listOf("Compléter la page 1", "Client"), missing(i))
-        val done = i.copy(
-            overlays = listOf(Overlay("o", OverlayKind.TEXT, 10f, 10f, "OK")),
-            values = mapOf(DocKeys.CLIENT to "Client Test"),
-        )
-        assertEquals(emptyList<String>(), missing(done))
+        // Aucun champ forcé : ni client, ni texte sur la page
+        assertEquals(listOf("Signature du client"), missing(i))
+        assertEquals(emptySet<String>(), Completion.missingFields(i))
+
+        val texte = i.copy(overlays = listOf(Overlay("t", OverlayKind.TEXT, 10f, 10f, "OK")))
+        assertEquals(listOf("Signature du client"), missing(texte))
+
+        val signeVide = i.copy(overlays = listOf(Overlay("s", OverlayKind.SIGNATURE, 10f, 10f, signature = SignatureData(emptyList(), 100f, 50f, 3f))))
+        assertEquals(listOf("Signature du client"), missing(signeVide))
+
+        val signe = i.copy(overlays = listOf(Overlay("s", OverlayKind.SIGNATURE, 10f, 10f, width = 150f, height = 75f, signature = sig)))
+        assertEquals(emptyList<String>(), missing(signe))
+    }
+
+    @Test
+    fun champsSignalesDansLeFormulaire() {
+        val empty = Intervention("x", InterventionType.FPS, 0L)
+        val fields = Completion.missingFields(empty)
+        // Client : les deux champs possibles ; matériel : marque, type, série
+        assertTrue(K.CLIENT_MANDATAIRE in fields && K.CLIENT_UTILISATEUR in fields)
+        assertTrue(K.MARQUE in fields && K.TYPE in fields && K.SERIE in fields)
+        assertTrue(K.SERRAGE_AV in fields && K.SERRAGE_AR in fields)
+        assertFalse(K.OBSERVATIONS in fields)
+
+        val client = empty.copy(values = mapOf(K.CLIENT_UTILISATEUR to "Entrepôt Test"))
+        assertFalse(K.CLIENT_MANDATAIRE in Completion.missingFields(client))
+        assertFalse("Client" in missing(client))
     }
 
     @Test

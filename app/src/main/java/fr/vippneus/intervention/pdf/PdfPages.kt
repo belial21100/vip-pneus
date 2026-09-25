@@ -92,6 +92,16 @@ object PdfPages {
         }
     }
 
+    /** Copie une seule page d'un PDF dans un nouveau fichier. */
+    fun extractPage(src: File, index: Int, out: File) {
+        PdfExporter.loadDecrypted(src).use { doc ->
+            PDDocument().use { single ->
+                single.importPage(doc.getPage(index))
+                single.save(out)
+            }
+        }
+    }
+
     /** Transforme une photo en PDF d'une page (pour compléter un document photographié). */
     fun imageToPdf(image: File, out: File) {
         PDDocument().use { doc ->
