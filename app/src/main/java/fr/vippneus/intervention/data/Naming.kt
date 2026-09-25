@@ -1,6 +1,7 @@
 package fr.vippneus.intervention.data
 
 import fr.vippneus.intervention.pdf.FpsTemplate.K
+import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -81,8 +82,13 @@ object Naming {
                 acc
             }
             .joinToString(" ")
-        return sanitize(if (dept != null) "$dept- $body" else body)
+        return sanitize(stripAccents(if (dept != null) "$dept- $body" else body))
     }
+
+    /** « RÉSEAUX » -> « RESEAUX » : noms de fichiers sans accents, comme ceux utilisés jusqu'ici. */
+    fun stripAccents(s: String): String =
+        Normalizer.normalize(s, Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+            .replace("Œ", "OE").replace("œ", "oe").replace("Æ", "AE").replace("æ", "ae")
 
     fun fileName(i: Intervention, initiales: String): String =
         sanitize(i.fileName.ifBlank { defaultFileName(i, initiales) })

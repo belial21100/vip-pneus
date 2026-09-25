@@ -70,6 +70,12 @@ class NamingTest {
     }
 
     @Test
+    fun nomDeFichier_sansAccents() {
+        val i = fps(K.CLIENT_MANDATAIRE to "Société Générale", K.CLIENT_UTILISATEUR to "Réseaux & TP", K.DATE to "04/08/26")
+        assertEquals("SOCIETE GENERALE RESEAUX & TP 04-08-2026 JPC", Naming.defaultFileName(i, "JPC"))
+    }
+
+    @Test
     fun ville_apresLaDerniereVirgule() {
         assertEquals("Laon", Naming.ville("12 rue X, Laon"))
         assertEquals("Laon", Naming.ville("Laon"))
