@@ -13,6 +13,8 @@ data class Settings(
     val message: String = DEFAULT_MESSAGE,
     /** Première configuration (page « Bienvenue ») terminée. */
     val setupDone: Boolean = false,
+    /** Apparence : suit la tablette, ou toujours claire / sombre. */
+    val theme: ThemeMode = ThemeMode.AUTO,
 ) {
     /** Réglages indispensables renseignés et valides. */
     val isComplete: Boolean
@@ -32,6 +34,13 @@ data class Settings(
     companion object {
         const val DEFAULT_MESSAGE = "Bonjour,\n\nVeuillez trouver ci-joint le bon d'intervention.\n\nCordialement,"
     }
+}
+
+/** Apparence de l'application. */
+enum class ThemeMode(val label: String) {
+    AUTO("Automatique"),
+    CLAIR("Clair"),
+    SOMBRE("Sombre"),
 }
 
 /** Règles de saisie des réglages (messages affichés sous les champs). */
@@ -79,6 +88,7 @@ class SettingsStore(context: Context) {
         emailCopie = prefs.getString("emailCopie", "").orEmpty(),
         message = prefs.getString("message", null) ?: Settings.DEFAULT_MESSAGE,
         setupDone = prefs.getBoolean("setupDone", false),
+        theme = prefs.getString("theme", null)?.let { t -> ThemeMode.entries.firstOrNull { it.name == t } } ?: ThemeMode.AUTO,
     )
 
     /** Écriture immédiate sur le disque ; renvoie false si elle a échoué. */
@@ -91,6 +101,7 @@ class SettingsStore(context: Context) {
             .putString("emailCopie", t.emailCopie)
             .putString("message", t.message)
             .putBoolean("setupDone", t.setupDone)
+            .putString("theme", t.theme.name)
             .commit()
     }
 }

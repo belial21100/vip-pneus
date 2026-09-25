@@ -233,8 +233,7 @@ private val AppShapes = Shapes(
 )
 
 @Composable
-fun VipTheme(content: @Composable () -> Unit) {
-    val dark = isSystemInDarkTheme()
+fun VipTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     val scheme = if (dark) DarkScheme else LightScheme
     CompositionLocalProvider(LocalVipColors provides if (dark) DarkVip else LightVip) {
         MaterialTheme(colorScheme = scheme, typography = AppTypography, shapes = AppShapes) {

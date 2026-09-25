@@ -63,6 +63,19 @@ Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office
 
 Des photos (bon papier, pneus…) et d'autres PDF peuvent être ajoutés à la suite de la fiche.
 
+### Liste des bons
+
+- Chaque bon montre la **miniature de sa page 1** telle qu'elle partira, son statut et ce qui
+  manque ; les bons sont **regroupés par jour d'intervention** (Aujourd'hui, Hier, Cette
+  semaine…).
+- **Tout envoyer** : les bons complets pas encore envoyés sont signalés en tête de liste et
+  partent ensemble en un appui (un seul e-mail).
+- **Supprimer** est immédiat mais annulable : « Bon supprimé — Annuler » pendant quelques
+  secondes, avant l'effacement définitif.
+- **Récapitulatif** : pour ce mois-ci ou le précédent, un tableau (CSV pour Excel : date,
+  type, client, site, n° de commande, fichier PDF, statut, date d'envoi, ce qui manque) est
+  envoyé à la comptabilité, pour vérifier que tous les bons sont bien arrivés.
+
 Nom de fichier par défaut, sur le modèle déjà utilisé :
 `02- LOC TEST ENTREPOT DUPONT 02000 LAON 1234567 24-08-2026 CE.pdf`
 (département, client, site, code postal, ville, n° de commande, date, initiales) ;
@@ -76,7 +89,8 @@ fichiers), e-mail de la comptabilité, copie éventuelle et message de l'e-mail.
 À la première ouverture, une page **Bienvenue** (technicien, comptabilité, récapitulatif)
 les demande obligatoirement avant d'accéder aux bons ; les adresses e-mail sont vérifiées.
 Tout est enregistré sur la tablette (rien n'est envoyé ailleurs) et reste modifiable dans
-**Réglages** (bouton « Enregistrer »).
+**Réglages** (bouton « Enregistrer »). L'**apparence** s'y choisit aussi : automatique (comme
+la tablette), claire ou sombre ; elle s'applique dès le choix.
 
 ## Installation sur les tablettes
 
@@ -104,6 +118,7 @@ désinstaller l'application (et perdre les bons enregistrés) pour installer une
   - `importer/` : lecture du texte positionné des PDF, reconnaissance des documents
     clients et pré-remplissage (`ClientDocs.kt`) ;
   - `data/Completion.kt` : ce qu'il reste à remplir sur un bon (cadre « À compléter ») ;
+    `data/Recap.kt` : récapitulatif mensuel pour la comptabilité ;
   - `ui/` : écrans (accueil, fiche, document client, éditeur de page, signature, réglages) ;
     `Theme.kt` (graphite et jaune, police Barlow) et `Components.kt` (éléments communs).
 - `app/src/main/assets/templates/fiche_presse_mobile.jpg` : fiche vierge (fond de page).

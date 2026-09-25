@@ -269,7 +269,7 @@ private fun DocumentForm(
                 text = "Les valeurs saisies s'écrivent directement à leur place sur le document ; l'original suit en page 2.",
             )
         }
-        TodoPanel(todos, onJump)
+        TodoPanel(todos, onJump, onSend = sendFromPanel(i, onResend), sendLabel = sendLabel(i))
 
         if (t != null) {
             val fields = t.fields.filter { it.key != signerKey }

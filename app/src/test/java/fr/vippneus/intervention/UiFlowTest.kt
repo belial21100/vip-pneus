@@ -1,6 +1,7 @@
 package fr.vippneus.intervention
 
 import android.app.Application
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.net.Uri
@@ -23,23 +24,28 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import fr.vippneus.intervention.data.Completion
 import fr.vippneus.intervention.data.DisplayStatus
 import fr.vippneus.intervention.data.DocKeys
 import fr.vippneus.intervention.data.InterventionType
+import fr.vippneus.intervention.data.Naming
 import fr.vippneus.intervention.data.Overlay
 import fr.vippneus.intervention.data.OverlayKind
+import fr.vippneus.intervention.data.Recap
 import fr.vippneus.intervention.data.Settings
 import fr.vippneus.intervention.data.SettingsStore
 import fr.vippneus.intervention.data.SignatureData
+import fr.vippneus.intervention.data.ThemeMode
 import fr.vippneus.intervention.data.displayStatus
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import fr.vippneus.intervention.ui.AppRoot
 import fr.vippneus.intervention.ui.AppViewModel
 import fr.vippneus.intervention.ui.Screen
 import fr.vippneus.intervention.ui.Tool
+import fr.vippneus.intervention.ui.VipApp
 import fr.vippneus.intervention.ui.VipTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,6 +54,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,6 +63,9 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.time.LocalDate
+import java.time.YearMonth
+import java.util.Locale
 
 /**
  * Parcours complets sur une tablette simulée ; les captures d'écran sont écrites
@@ -69,6 +79,16 @@ class UiFlowTest {
     val compose = createAndroidComposeRule<ComponentActivity>()
 
     private val shots = File(System.getProperty("user.dir"), "build/test-output/ecrans").apply { mkdirs() }
+
+    /**
+     * FileProvider garde en mémoire les dossiers de la première application qui l'a utilisé ;
+     * sous Robolectric, chaque test a ses propres dossiers : on vide ce cache avant chaque test.
+     */
+    @Before
+    fun videCacheFileProvider() {
+        val cache = FileProvider::class.java.getDeclaredField("sCache").apply { isAccessible = true }
+        synchronized(cache.get(null)!!) { (cache.get(null) as MutableMap<*, *>).clear() }
+    }
 
     /** Capture logicielle de la fenêtre et des dialogues (captureToImage n'est pas disponible sous Robolectric). */
     private fun snap(name: String) {
@@ -289,7 +309,7 @@ class UiFlowTest {
         val src = File(app.cacheDir, "Feuille de tache 1234567.pdf").also { FakeDocs.interfit(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
         val messages = mutableListOf<String>()
-        val job = CoroutineScope(Dispatchers.Main).launch { vm.messages.collect { messages += it } }
+        val job = CoroutineScope(Dispatchers.Main).launch { vm.messages.collect { messages += it.text } }
         vm.importClient(Uri.fromFile(src))
         waitFor { vm.backStack.last() is Screen.Document }
         job.cancel()
@@ -444,7 +464,7 @@ class UiFlowTest {
         val src = File(app.cacheDir, "Feuille de tache 1234567 traitee.pdf").also { FakeDocs.interfitAfterCover(it) }
         compose.setContent { VipTheme { AppRoot(vm) } }
         val messages = mutableListOf<String>()
-        val job = CoroutineScope(Dispatchers.Main).launch { vm.messages.collect { messages += it } }
+        val job = CoroutineScope(Dispatchers.Main).launch { vm.messages.collect { messages += it.text } }
         vm.importClient(Uri.fromFile(src))
         waitFor { vm.backStack.last() is Screen.Document }
         idle(10)
@@ -489,14 +509,18 @@ class UiFlowTest {
                 K.CLIENT_MANDATAIRE to "LOC TEST", K.CLIENT_UTILISATEUR to "Entrepôt Test Logistique", K.NUMERO_COMMANDE to "7654321",
                 K.MARQUE to "Hyster", K.HORAMETRE to "1293", K.pneu("av", "dimensions") to "22x12x16",
                 K.prestation("depose", "autres") to "4", K.SERRAGE_AV to "650",
+                K.DATE to Naming.formatShort(LocalDate.now().minusDays(1)),
             ),
             sent = true, signed = true,
         )
         fps(mapOf(K.CLIENT_MANDATAIRE to "MANUTENTION TEST", K.CLIENT_UTILISATEUR to "Plateforme Test", K.NUMERO_COMMANDE to "900000001"))
         fps(mapOf(K.CLIENT_MANDATAIRE to "Garage Exemple", K.MARQUE to "Linde"))
         compose.setContent { VipTheme { AppRoot(vm) } }
-        idle()
+        idle(40)
         snap("13-accueil-plusieurs-bons")
+        // Regroupés par jour d'intervention
+        compose.onNodeWithText("AUJOURD'HUI").assertExists()
+        compose.onNodeWithText("HIER").assertExists()
         // Ce qui manque est écrit sur chaque carte
         compose.onAllNodesWithText("À compléter :", substring = true)[0].assertExists()
 
@@ -582,5 +606,117 @@ class UiFlowTest {
         compose.onNodeWithContentDescription("Quitter le plein écran").performClick()
         idle(10)
         compose.onNodeWithText("À compléter avant l'envoi").assertExists()
+    }
+
+    @Test
+    fun suppressionAnnulable() {
+        val vm = newVm()
+        configure(vm)
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val a = vm.createFps()
+        vm.update(a) { it.copy(values = it.values + (K.CLIENT_MANDATAIRE to "Client A")) }
+        val b = vm.createFps()
+        vm.update(b) { it.copy(values = it.values + (K.CLIENT_MANDATAIRE to "Client B")) }
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        idle()
+        // Supprimé tout de suite, sans question, mais « Annuler » le rend
+        vm.delete(setOf(a))
+        idle(4)
+        assertFalse(vm.interventions.value.any { it.id == a })
+        compose.onNodeWithText("Bon supprimé").assertExists()
+        snap("21-suppression-annulable")
+        compose.onNodeWithText("Annuler").performClick()
+        idle(4)
+        assertTrue(vm.interventions.value.any { it.id == a })
+        // Sans « Annuler », les fichiers sont effacés quand le message disparaît
+        val dir = File(app.filesDir, "interventions/$b")
+        waitFor { dir.exists() }
+        vm.delete(setOf(b))
+        idle(4)
+        compose.mainClock.advanceTimeBy(12_000)
+        waitFor { !dir.exists() }
+        assertFalse(dir.exists())
+        assertTrue(File(app.filesDir, "interventions/$a").exists())
+    }
+
+    @Test
+    fun toutEnvoyer_bonsComplets() {
+        val vm = newVm()
+        configure(vm)
+        fun complet(client: String): String {
+            val id = vm.createFps()
+            vm.update(id) {
+                it.copy(
+                    values = it.values + mapOf(
+                        K.CLIENT_MANDATAIRE to client, K.NUMERO_COMMANDE to "1234567", K.MARQUE to "Hyster",
+                        K.HORAMETRE to "1293", K.pneu("av", "quantite") to "2", K.prestation("depose", "8") to "2",
+                        K.SERRAGE_AV to "650",
+                    ),
+                    signature = signature(),
+                )
+            }
+            return id
+        }
+        val a = complet("Client A")
+        val b = complet("Client B")
+        val incomplet = vm.createFps()
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        idle(40)
+        compose.onNodeWithText("2 bons complets, prêts à partir").assertExists()
+        snap("22-tout-envoyer")
+        compose.onNodeWithText("Tout envoyer").performClick()
+        waitFor { vm.interventions.value.filter { it.id == a || it.id == b }.all { it.sentAt != null } }
+        assertEquals(DisplayStatus.ENVOYE, vm.interventions.value.first { it.id == a }.displayStatus())
+        assertEquals(DisplayStatus.ENVOYE, vm.interventions.value.first { it.id == b }.displayStatus())
+        // Le bon incomplet n'est pas parti
+        assertEquals(null, vm.interventions.value.first { it.id == incomplet }.sentAt)
+        idle(10)
+        compose.onNodeWithText("prêts à partir", substring = true).assertDoesNotExist()
+    }
+
+    @Test
+    fun recapitulatifDuMois() {
+        val vm = newVm()
+        configure(vm)
+        val id = vm.createFps()
+        vm.update(id) { it.copy(values = it.values + (K.CLIENT_MANDATAIRE to "Client A")) }
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        idle()
+        compose.onNodeWithText("Récapitulatif").performClick()
+        idle(4)
+        snap("23-recapitulatif")
+        val mois = Recap.monthLabel(YearMonth.now()).replaceFirstChar { it.titlecase(Locale.FRANCE) }
+        compose.onNodeWithText(mois).performClick()
+        var started: Intent? = null
+        waitFor { shadowOf(compose.activity).nextStartedActivity?.also { started = it } != null }
+        // Messagerie : tableau joint, objet et destinataire de la compta
+        val mail = started!!.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)!!
+        assertEquals("text/csv", mail.type)
+        assertTrue(mail.getStringExtra(Intent.EXTRA_SUBJECT)!!.startsWith("Récapitulatif des bons"))
+        assertEquals("compta@example.com", mail.getStringArrayExtra(Intent.EXTRA_EMAIL)!!.single())
+        val uri = mail.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)!!
+        val csv = compose.activity.contentResolver.openInputStream(uri)!!.use { it.readBytes().toString(Charsets.UTF_8) }
+        assertTrue(csv, csv.contains("Client A"))
+    }
+
+    @Test
+    fun apparenceSombre() {
+        val vm = newVm()
+        configure(vm)
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        compose.setContent { VipApp(vm) }
+        idle()
+        vm.navigate(Screen.Settings)
+        idle(4)
+        // Appliquée et enregistrée dès le choix
+        compose.onNodeWithText("Sombre").performScrollTo().performClick()
+        idle(10)
+        assertEquals(ThemeMode.SOMBRE, vm.settings.value.theme)
+        waitFor { SettingsStore(app).load().theme == ThemeMode.SOMBRE }
+        assertEquals(ThemeMode.SOMBRE, SettingsStore(app).load().theme)
+        snap("24-reglages-apparence-sombre")
+        vm.back()
+        idle(20)
+        snap("24b-accueil-sombre")
     }
 }

@@ -1,6 +1,8 @@
 package fr.vippneus.intervention.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -29,13 +31,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Badge
+import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Contrast
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.FactCheck
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Save
@@ -56,7 +62,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -70,6 +80,7 @@ import fr.vippneus.intervention.BuildConfigInfo
 import fr.vippneus.intervention.data.Naming
 import fr.vippneus.intervention.data.Settings
 import fr.vippneus.intervention.data.SettingsRules
+import fr.vippneus.intervention.data.ThemeMode
 import java.util.Locale
 
 // ------------------------------------------------------------------ saisie des réglages
@@ -681,6 +692,7 @@ fun SettingsScreen(vm: AppViewModel) {
             ) {
                 TechnicienCard(form, showErrors)
                 ComptaCard(form, showErrors)
+                AppearanceCard(saved.theme) { vm.setTheme(it) }
                 SectionCard("À propos", icon = Icons.Filled.Info) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         BrandMark(44.dp)
@@ -727,6 +739,84 @@ fun SettingsScreen(vm: AppViewModel) {
                 }) { Text("Ne pas enregistrer") }
             },
         )
+    }
+}
+
+/** Apparence : automatique (comme la tablette), claire ou sombre ; appliquée dès le choix. */
+@Composable
+private fun AppearanceCard(current: ThemeMode, onChange: (ThemeMode) -> Unit) {
+    SectionCard("Apparence", icon = Icons.Filled.Contrast, subtitle = "Appliquée et enregistrée dès le choix") {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ThemeMode.entries.forEach { m ->
+                ThemeOption(m, selected = m == current, onClick = { onChange(m) }, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ThemeOption(mode: ThemeMode, selected: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val c = Vip.colors
+    val (icon, text) = when (mode) {
+        ThemeMode.AUTO -> Icons.Filled.BrightnessAuto to "Suit le réglage de la tablette"
+        ThemeMode.CLAIR -> Icons.Filled.LightMode to "Idéal en plein jour"
+        ThemeMode.SOMBRE -> Icons.Filled.DarkMode to "Idéal le soir ou en atelier"
+    }
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.medium,
+        color = if (selected) c.accentSoft else c.card,
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.cardBorder),
+        modifier = modifier,
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            ThemeSwatch(mode)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(mode.label, style = MaterialTheme.typography.titleSmall)
+            }
+            Text(text, style = MaterialTheme.typography.bodySmall, color = c.muted)
+        }
+    }
+}
+
+/** Mini aperçu de l'écran : barre graphite, fond et carte clairs ou sombres (moitié-moitié en automatique). */
+@Composable
+private fun ThemeSwatch(mode: ThemeMode) {
+    Canvas(
+        Modifier
+            .fillMaxWidth()
+            .height(64.dp)
+            .clip(MaterialTheme.shapes.small),
+    ) {
+        fun half(dark: Boolean, left: Float, right: Float) {
+            val bg = if (dark) Palette.Graphite950 else Palette.Graphite50
+            val card = if (dark) Palette.Graphite800 else Color.White
+            val line = if (dark) Palette.Graphite600 else Palette.Graphite200
+            drawRect(bg, Offset(left, 0f), Size(right - left, size.height))
+            val bar = size.height * 0.24f
+            drawRect(Palette.Graphite900, Offset(left, 0f), Size(right - left, bar))
+            val pad = size.width * 0.06f
+            val top = bar + size.height * 0.14f
+            val w = size.width - 2 * pad
+            // carte, lignes de texte et pastille jaune (dessinées sur toute la largeur, découpées par la moitié)
+            clipRect(left, 0f, right, size.height) {
+                drawRoundRect(card, Offset(pad, top), Size(w, size.height - top - pad * 0.6f), CornerRadius(8f))
+                drawRoundRect(line, Offset(pad * 1.8f, top + size.height * 0.14f), Size(w * 0.55f, 6f), CornerRadius(3f))
+                drawRoundRect(line, Offset(pad * 1.8f, top + size.height * 0.30f), Size(w * 0.35f, 6f), CornerRadius(3f))
+                drawRoundRect(Palette.Amber, Offset(size.width - pad * 1.8f - w * 0.22f, top + size.height * 0.16f), Size(w * 0.22f, 12f), CornerRadius(6f))
+            }
+        }
+        when (mode) {
+            ThemeMode.CLAIR -> half(false, 0f, size.width)
+            ThemeMode.SOMBRE -> half(true, 0f, size.width)
+            ThemeMode.AUTO -> {
+                half(false, 0f, size.width / 2f)
+                half(true, size.width / 2f, size.width)
+            }
+        }
     }
 }
 

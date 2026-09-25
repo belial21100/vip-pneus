@@ -37,21 +37,21 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Visibility
@@ -89,15 +89,19 @@ import fr.vippneus.intervention.data.DisplayStatus
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Naming
+import fr.vippneus.intervention.data.Recap
 import fr.vippneus.intervention.data.Settings
 import fr.vippneus.intervention.data.displayStatus
 import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.WeekFields
 import java.util.Date
 import java.util.Locale
 
@@ -135,7 +139,6 @@ fun HomeScreen(vm: AppViewModel) {
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf(Filter.TOUS) }
     var selection by remember { mutableStateOf(setOf<String>()) }
-    var confirmDelete by remember { mutableStateOf<Set<String>?>(null) }
     // Bons à envoyer dont il manque quelque chose : à confirmer
     var sendCheck by remember { mutableStateOf<List<String>?>(null) }
 
@@ -156,9 +159,21 @@ fun HomeScreen(vm: AppViewModel) {
     val onFilter = { f: Filter -> filter = if (filter == f && f != Filter.TOUS) Filter.TOUS else f }
 
     val counts = remember(all) { Counts(all) }
+    // Complets et pas encore envoyés (ou modifiés depuis l'envoi) : prêts à partir
+    val ready = remember(all) {
+        all.filter {
+            val st = it.displayStatus()
+            st != DisplayStatus.ENVOYE && st != DisplayStatus.INCOMPLET && Completion.missing(it).isEmpty()
+        }.sortedByDescending { it.updatedAt }
+    }
+    val recapMonths = remember(all) {
+        val now = YearMonth.now()
+        listOf(now, now.minusMonths(1)).map { m -> m to Recap.bonsOf(all, m).size }
+    }
     val shown = remember(all, query, filter) {
         val q = query.trim().lowercase(Locale.FRANCE)
-        all.sortedByDescending { it.updatedAt }
+        // Du jour d'intervention le plus récent au plus ancien, puis dernier modifié en tête
+        all.sortedWith(compareByDescending<Intervention> { Naming.interventionDate(it) }.thenByDescending { it.updatedAt })
             .filter {
                 when (filter) {
                     Filter.TOUS -> true
@@ -191,8 +206,13 @@ fun HomeScreen(vm: AppViewModel) {
             onSend = { i -> trySend(listOf(i.id)) },
             onPreview = { i -> scope.launch { if (vm.generate(i.id) != null) vm.navigate(Screen.Viewer(i.id)) } },
             onDuplicate = { i -> vm.duplicate(i.id) },
-            onDelete = { i -> confirmDelete = setOf(i.id) },
+            onDelete = { i -> vm.delete(setOf(i.id)) },
             onSettings = onSettings,
+            source = vm::sourceFile,
+            ready = ready,
+            onSendAll = { vm.send(context, ready.map { it.id }) },
+            recapMonths = recapMonths,
+            onRecap = { m -> vm.sendRecap(context, m) },
         )
     }
 
@@ -237,7 +257,10 @@ fun HomeScreen(vm: AppViewModel) {
             SelectionBar(
                 count = selection.size,
                 onClose = { selection = emptySet() },
-                onDelete = { confirmDelete = selection },
+                onDelete = {
+                    vm.delete(selection)
+                    selection = emptySet()
+                },
                 onSend = {
                     val ids = shown.map { it.id }.filter { it in selection }
                     trySend(ids)
@@ -271,18 +294,6 @@ fun HomeScreen(vm: AppViewModel) {
         }
     }
 
-    confirmDelete?.let { ids ->
-        ConfirmDialog(
-            title = if (ids.size == 1) "Supprimer ce bon ?" else "Supprimer ${ids.size} bons ?",
-            text = "Le bon, sa signature et ses documents joints seront effacés de la tablette.",
-            confirmLabel = "Supprimer",
-            onDismiss = { confirmDelete = null },
-            onConfirm = {
-                vm.delete(ids)
-                selection = selection - ids
-            },
-        )
-    }
 }
 
 private fun Set<String>.toggle(id: String) = if (id in this) this - id else this + id
@@ -570,8 +581,18 @@ private fun BonsList(
     onDuplicate: (Intervention) -> Unit,
     onDelete: (Intervention) -> Unit,
     onSettings: () -> Unit,
+    source: (Intervention) -> File?,
+    ready: List<Intervention>,
+    onSendAll: () -> Unit,
+    recapMonths: List<Pair<YearMonth, Int>>,
+    onRecap: (YearMonth) -> Unit,
 ) {
     val c = Vip.colors
+    // Bons regroupés par jour d'intervention (Aujourd'hui, Hier, Cette semaine…)
+    val groups = remember(shown) {
+        val today = LocalDate.now()
+        shown.groupBy { dayGroup(Naming.interventionDate(it), today) }
+    }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 340.dp),
         contentPadding = PaddingValues(start = 28.dp, end = 28.dp, top = 28.dp, bottom = 120.dp),
@@ -593,13 +614,20 @@ private fun BonsList(
                         color = c.muted,
                     )
                 }
-                Spacer(Modifier.width(16.dp))
+                Spacer(Modifier.width(12.dp))
+                RecapButton(recapMonths, onRecap)
+                Spacer(Modifier.width(12.dp))
                 SearchField(query, onQuery, Modifier.widthIn(min = 240.dp, max = 380.dp))
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Filter.entries.forEach { f -> FilterPill(f.label, counts.of(f), filter == f) { onFilter(f) } }
+            }
+        }
+        if (ready.isNotEmpty() && selection.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }, key = "prets") {
+                ReadyBanner(ready, onSendAll, Modifier.animateItem())
             }
         }
         if (settings.emailCompta.isBlank() || settings.technicien.isBlank()) {
@@ -629,18 +657,101 @@ private fun BonsList(
                 }
             }
         }
-        items(shown, key = { it.id }) { i ->
-            InterventionCard(
-                i = i,
-                selected = i.id in selection,
-                selectionMode = selection.isNotEmpty(),
-                onClick = { onOpen(i) },
-                onLongClick = { onToggle(i) },
-                onSend = { onSend(i) },
-                onPreview = { onPreview(i) },
-                onDuplicate = { onDuplicate(i) },
-                onDelete = { onDelete(i) },
+        groups.forEach { (label, bons) ->
+            item(span = { GridItemSpan(maxLineSpan) }, key = "jour:$label", contentType = "jour") {
+                SubHeader(label, Modifier.animateItem()) {
+                    Text(if (bons.size == 1) "1 bon" else "${bons.size} bons", style = MaterialTheme.typography.labelMedium, color = c.muted)
+                }
+            }
+            items(bons, key = { it.id }, contentType = { "bon" }) { i ->
+                InterventionCard(
+                    i = i,
+                    source = source(i),
+                    selected = i.id in selection,
+                    selectionMode = selection.isNotEmpty(),
+                    onClick = { onOpen(i) },
+                    onLongClick = { onToggle(i) },
+                    onSend = { onSend(i) },
+                    onPreview = { onPreview(i) },
+                    onDuplicate = { onDuplicate(i) },
+                    onDelete = { onDelete(i) },
+                    modifier = Modifier.animateItem(),
+                )
+            }
+        }
+    }
+}
+
+/** Groupe de la liste selon le jour de l'intervention. */
+private fun dayGroup(d: LocalDate, today: LocalDate): String {
+    val week = WeekFields.of(Locale.FRANCE)
+    return when {
+        d.isAfter(today) -> "À venir"
+        d == today -> "Aujourd'hui"
+        d == today.minusDays(1) -> "Hier"
+        d.get(week.weekBasedYear()) == today.get(week.weekBasedYear()) &&
+            d.get(week.weekOfWeekBasedYear()) == today.get(week.weekOfWeekBasedYear()) -> "Cette semaine"
+        YearMonth.from(d) == YearMonth.from(today) -> "Plus tôt ce mois-ci"
+        else -> Recap.monthLabel(YearMonth.from(d)).replaceFirstChar { it.titlecase(Locale.FRANCE) }
+    }
+}
+
+/** Bons complets pas encore envoyés : un appui les envoie tous ensemble. */
+@Composable
+private fun ReadyBanner(ready: List<Intervention>, onSendAll: () -> Unit, modifier: Modifier = Modifier) {
+    val c = Vip.colors
+    val n = ready.size
+    InfoBanner(
+        icon = Icons.Filled.DoneAll,
+        title = if (n == 1) "1 bon complet, prêt à partir" else "$n bons complets, prêts à partir",
+        text = ready.take(3).joinToString("  ·  ") { Naming.title(it) } + if (n > 3) "  ·  …" else "",
+        background = c.successSoft,
+        content = c.success,
+        modifier = modifier,
+        action = {
+            VipButton(if (n == 1) "Envoyer" else "Tout envoyer", onSendAll, icon = Icons.AutoMirrored.Filled.Send, compact = true)
+        },
+    )
+}
+
+/** Récapitulatif d'un mois pour la compta (tableur), ce mois-ci ou le précédent. */
+@Composable
+private fun RecapButton(months: List<Pair<YearMonth, Int>>, onRecap: (YearMonth) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    val c = Vip.colors
+    Box {
+        VipButton("Récapitulatif", { open = true }, icon = Icons.Filled.TableChart, tone = Tone.GHOST, compact = true)
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = c.card) {
+            Text(
+                "Envoyer à la compta le récapitulatif du mois\n(tableau à ouvrir dans Excel)",
+                style = MaterialTheme.typography.labelMedium,
+                color = c.muted,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
+            months.forEach { (m, n) ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(Recap.monthLabel(m).replaceFirstChar { it.titlecase(Locale.FRANCE) }, style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                when (n) {
+                                    0 -> "Aucun bon"
+                                    1 -> "1 bon"
+                                    else -> "$n bons"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = c.muted,
+                            )
+                        }
+                    },
+                    leadingIcon = { Icon(Icons.Filled.TableChart, contentDescription = null) },
+                    enabled = n > 0,
+                    onClick = {
+                        open = false
+                        onRecap(m)
+                    },
+                )
+            }
         }
     }
 }
@@ -730,6 +841,7 @@ private fun StepsGuide(modifier: Modifier = Modifier) {
 @Composable
 private fun InterventionCard(
     i: Intervention,
+    source: File?,
     selected: Boolean,
     selectionMode: Boolean,
     onClick: () -> Unit,
@@ -738,6 +850,7 @@ private fun InterventionCard(
     onPreview: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val c = Vip.colors
     val status = i.displayStatus()
@@ -748,7 +861,7 @@ private fun InterventionCard(
         shape = shape,
         color = if (selected) c.accentSoft else c.card,
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.cardBorder),
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
@@ -760,21 +873,35 @@ private fun InterventionCard(
                     .fillMaxHeight()
                     .background(statusColor(status)),
             )
+            // Miniature de la page 1, telle qu'elle partira
+            Box(
+                Modifier
+                    .padding(start = 16.dp, top = 16.dp, bottom = 16.dp)
+                    .width(66.dp),
+            ) {
+                BonThumbnail(i, source, Modifier.fillMaxWidth())
+                if (selected) {
+                    Box(
+                        Modifier
+                            .matchParentSize()
+                            .background(c.accent.copy(alpha = 0.45f), RoundedCornerShape(4.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.CheckCircle, contentDescription = "Sélectionné", tint = Palette.Graphite900, modifier = Modifier.size(32.dp))
+                    }
+                }
+            }
             Column(
                 Modifier
                     .weight(1f)
-                    .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 4.dp),
+                    .padding(start = 14.dp, top = 14.dp, bottom = 16.dp, end = 4.dp),
             ) {
                 Row(verticalAlignment = Alignment.Top) {
-                    val (icon, bg, tint) = when {
-                        selected -> Triple(Icons.Filled.CheckCircle, c.accent, Palette.Graphite900)
-                        i.type == InterventionType.FPS -> Triple(Icons.AutoMirrored.Filled.Assignment, c.chromeHigh, c.accent)
-                        i.template != null -> Triple(Icons.Filled.Draw, c.chromeHigh, c.accent)
-                        else -> Triple(Icons.Filled.PictureAsPdf, c.chromeHigh, c.accent)
-                    }
-                    IconBadge(icon, background = bg, tint = tint, size = 44.dp)
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f)) {
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .padding(top = 2.dp),
+                    ) {
                         Text(Naming.title(i), style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         val clientFinal = i.template?.panel?.lines?.firstOrNull()?.let { i.value(it.key).trim() }.orEmpty()
                         Text(
@@ -791,7 +918,7 @@ private fun InterventionCard(
                         Spacer(Modifier.width(12.dp))
                     }
                 }
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.height(10.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Naming.reference(i).takeIf { it.isNotEmpty() }?.let { Meta(Icons.Filled.Tag, it, Modifier.weight(1f, fill = false)) }
                     Meta(Icons.Filled.Event, Naming.formatShort(Naming.interventionDate(i)))
@@ -807,14 +934,15 @@ private fun InterventionCard(
                 }
                 if (note != null) {
                     val tint = if (missing.isEmpty() && status == DisplayStatus.MODIFIE) c.info else c.warning
-                    Spacer(Modifier.height(10.dp))
+                    Spacer(Modifier.height(8.dp))
                     Row(Modifier.padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Warning, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(note, style = MaterialTheme.typography.bodySmall, color = tint, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                Spacer(Modifier.height(14.dp))
+                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(12.dp))
                 Row(Modifier.padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     StatusChip(status)
                     Spacer(Modifier.weight(1f))

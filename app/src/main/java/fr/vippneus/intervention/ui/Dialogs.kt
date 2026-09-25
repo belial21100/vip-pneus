@@ -303,29 +303,6 @@ fun TextEditDialog(
     )
 }
 
-/** Confirmation d'une action destructive. */
-@Composable
-fun ConfirmDialog(
-    title: String,
-    text: String,
-    confirmLabel: String,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit,
-) {
-    val c = Vip.colors
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = c.card,
-        icon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = c.danger) },
-        title = { Text(title) },
-        text = { Text(text) },
-        confirmButton = {
-            VipButton(confirmLabel, { onConfirm(); onDismiss() }, tone = Tone.DANGER, compact = true)
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
-    )
-}
-
 /** Nom du fichier PDF envoyé (vide = nom automatique). */
 @Composable
 fun FileNameDialog(auto: String, current: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {

@@ -273,7 +273,7 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
                     },
                 )
             }
-            TodoPanel(todos, onJump)
+            TodoPanel(todos, onJump, onSend = sendFromPanel(i, onResend), sendLabel = sendLabel(i))
 
             SectionCard("Commande et client", nav.anchor("client"), icon = Icons.AutoMirrored.Filled.Assignment, trailing = status("client")) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

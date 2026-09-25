@@ -14,23 +14,29 @@ import com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException
 import fr.vippneus.intervention.data.Attachment
 import fr.vippneus.intervention.data.AttachmentKind
 import fr.vippneus.intervention.data.Completion
+import fr.vippneus.intervention.data.DisplayStatus
 import fr.vippneus.intervention.data.DocKeys
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionRepository
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Naming
+import fr.vippneus.intervention.data.Recap
 import fr.vippneus.intervention.data.Settings
 import fr.vippneus.intervention.data.SettingsStore
 import fr.vippneus.intervention.data.SourceDoc
 import fr.vippneus.intervention.data.Suggestions
+import fr.vippneus.intervention.data.ThemeMode
+import fr.vippneus.intervention.data.displayStatus
 import fr.vippneus.intervention.importer.ClientImport
 import fr.vippneus.intervention.importer.ImportPlan
 import fr.vippneus.intervention.pdf.ExportException
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import fr.vippneus.intervention.pdf.PdfExporter
 import fr.vippneus.intervention.pdf.PdfPages
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +50,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.time.YearMonth
 import java.util.Locale
 import java.util.UUID
 
@@ -55,6 +62,15 @@ sealed interface Screen {
     data class Editor(val id: String) : Screen
     data class Viewer(val id: String) : Screen
 }
+
+/** Message en bas de l'écran, avec une action éventuelle (ex. « Annuler » après une suppression). */
+data class UiMessage(
+    val text: String,
+    val action: String? = null,
+    val onAction: () -> Unit = {},
+    /** Message disparu sans que l'action soit choisie. */
+    val onDismiss: () -> Unit = {},
+)
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
     private companion object {
@@ -84,8 +100,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     /** Pile de navigation (le dernier élément est l'écran affiché). */
     val backStack = mutableStateListOf<Screen>(Screen.Home)
 
-    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
-    val messages: SharedFlow<String> = _messages
+    private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
+    val messages: SharedFlow<UiMessage> = _messages
 
     /** Libellé de l'opération en cours (null = aucune). */
     private val _busy = MutableStateFlow<String?>(null)
@@ -96,6 +112,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Écritures disque une par une, toujours avec l'état le plus récent. */
     private val disk = Dispatchers.IO.limitedParallelism(1)
+
+    /** Effacements de fichiers menés à terme même si l'écran se ferme. */
+    private val purgeScope = CoroutineScope(SupervisorJob() + disk)
 
     init {
         viewModelScope.launch {
@@ -132,7 +151,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun message(text: String) {
-        _messages.tryEmit(text)
+        _messages.tryEmit(UiMessage(text))
     }
 
     // ---------------------------------------------------------------- données
@@ -188,6 +207,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             saveJobs.remove(id)?.cancel()
             get(id)?.let { runCatching { repo.save(it) } }
         }
+        // L'application passe en arrière-plan : « Annuler » n'est plus possible
+        purgeTrash()
     }
 
     override fun onCleared() {
@@ -203,6 +224,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
             if (!settingsStore.save(t)) message("Enregistrement des réglages impossible")
         }
     }
+
+    /** Apparence choisie dans les réglages : appliquée et enregistrée tout de suite. */
+    fun setTheme(mode: ThemeMode) = saveSettings(_settings.value.copy(theme = mode))
 
     /** Fin de la première configuration ; un document reçu entre-temps est alors importé. */
     fun completeSetup(s: Settings) {
@@ -245,11 +269,43 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         navigate(Screen.Fps(i.id))
     }
 
+    /** Bons supprimés à l'instant : leurs fichiers restent le temps de pouvoir annuler. */
+    private val trash = LinkedHashMap<String, Intervention>()
+
+    /** Suppression annulable : « Bon supprimé — Annuler » ; les fichiers partent quand le message disparaît. */
     fun delete(ids: Collection<String>) {
         val set = ids.toSet()
+        val removed = _interventions.value.filter { it.id in set }
+        if (removed.isEmpty()) return
         _interventions.value = _interventions.value.filterNot { it.id in set }
-        set.forEach { saveJobs.remove(it)?.cancel(); dirty -= it }
-        viewModelScope.launch(disk) { set.forEach { repo.delete(it) } }
+        removed.forEach {
+            saveJobs.remove(it.id)?.cancel()
+            dirty -= it.id
+            trash[it.id] = it
+        }
+        val back = removed.map { it.id }
+        _messages.tryEmit(
+            UiMessage(
+                text = if (removed.size == 1) "Bon supprimé" else "${removed.size} bons supprimés",
+                action = "Annuler",
+                onAction = { restore(back) },
+                onDismiss = { purgeTrash(back) },
+            ),
+        )
+    }
+
+    private fun restore(ids: List<String>) {
+        val back = ids.mapNotNull { trash.remove(it) }
+        if (back.isEmpty()) return
+        _interventions.value = _interventions.value + back
+        // Réécrit tel quel : une modification pas encore enregistrée au moment de la suppression est gardée
+        back.forEach { persistNow(it.id) }
+    }
+
+    /** Efface pour de bon les fichiers des bons supprimés (tous, ou seulement [ids]). */
+    private fun purgeTrash(ids: Collection<String> = trash.keys.toList()) {
+        val gone = ids.filter { trash.remove(it) != null }
+        if (gone.isNotEmpty()) purgeScope.launch { gone.forEach { repo.delete(it) } }
     }
 
     // ---------------------------------------------------------------- import
@@ -550,6 +606,54 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                     else -> message("${incomplete.size} bons envoyés incomplets : ils sont marqués pour être corrigés ensuite.")
                 }
+            } catch (_: ActivityNotFoundException) {
+                message("Aucune application d'envoi (messagerie) n'est installée")
+            }
+        }
+    }
+
+    /** Récapitulatif d'un mois (tableur pour Excel) envoyé à la comptabilité. */
+    fun sendRecap(context: Context, month: YearMonth) {
+        viewModelScope.launch {
+            val bons = Recap.bonsOf(_interventions.value, month)
+            val label = Recap.monthLabel(month)
+            if (bons.isEmpty()) {
+                message("Aucun bon en $label")
+                return@launch
+            }
+            val s = _settings.value
+            val file = try {
+                withContext(Dispatchers.IO) {
+                    val dir = File(getApplication<Application>().cacheDir, "recap").apply { mkdirs() }
+                    dir.listFiles()?.forEach { it.delete() }
+                    File(dir, Naming.sanitize("Recapitulatif bons $month ${s.initiales}") + ".csv")
+                        .apply { writeText(Recap.csv(bons, s.initiales)) }
+                }
+            } catch (e: Exception) {
+                message("Récapitulatif impossible : ${friendlyError(e)}")
+                return@launch
+            }
+            val uri = FileProvider.getUriForFile(context, authority(), file)
+            val sent = bons.count { it.displayStatus() == DisplayStatus.ENVOYE }
+            val body = buildString {
+                append("Bonjour,\n\nVeuillez trouver ci-joint le récapitulatif des bons de ").append(label).append(" : ")
+                append(if (bons.size == 1) "1 bon" else "${bons.size} bons")
+                append(if (sent == bons.size) ", tous envoyés." else " (dont ${bons.size - sent} pas encore envoyé(s) ou à corriger).")
+                append("\n\nCordialement,")
+                if (s.technicien.isNotBlank()) append("\n").append(s.technicien.trim())
+            }
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/csv"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                if (s.emailCompta.isNotBlank()) putExtra(Intent.EXTRA_EMAIL, splitEmails(s.emailCompta))
+                if (s.emailCopie.isNotBlank()) putExtra(Intent.EXTRA_CC, splitEmails(s.emailCopie))
+                putExtra(Intent.EXTRA_SUBJECT, "Récapitulatif des bons – $label")
+                putExtra(Intent.EXTRA_TEXT, body)
+                clipData = ClipData.newRawUri(file.name, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            try {
+                context.startActivity(Intent.createChooser(intent, "Envoyer le récapitulatif"))
             } catch (_: ActivityNotFoundException) {
                 message("Aucune application d'envoi (messagerie) n'est installée")
             }

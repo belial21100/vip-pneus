@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -65,6 +66,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Color
@@ -81,11 +83,13 @@ import androidx.compose.ui.unit.dp
 import fr.vippneus.intervention.data.Attachment
 import fr.vippneus.intervention.data.AttachmentKind
 import fr.vippneus.intervention.data.Completion
+import fr.vippneus.intervention.data.DisplayStatus
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Naming
 import fr.vippneus.intervention.data.SignatureData
 import fr.vippneus.intervention.data.Todo
+import fr.vippneus.intervention.data.displayStatus
 import fr.vippneus.intervention.pdf.Box as PdfBox
 import fr.vippneus.intervention.pdf.PageOps
 import fr.vippneus.intervention.pdf.SignatureOp
@@ -485,6 +489,15 @@ private fun AttachmentRow(
 // ------------------------------------------------------------------ envoi
 
 /**
+ * Envoi proposé dans le cadre « Tout est rempli » : pas pour un bon déjà envoyé tel quel,
+ * ni quand le bandeau « Complété depuis l'envoi incomplet » propose déjà de le renvoyer.
+ */
+fun sendFromPanel(i: Intervention, send: () -> Unit): (() -> Unit)? =
+    if (i.displayStatus() == DisplayStatus.ENVOYE || i.sentMissing.isNotEmpty()) null else send
+
+fun sendLabel(i: Intervention): String = if (i.sentAt != null) "Renvoyer à la compta" else "Envoyer à la compta"
+
+/**
  * Bon envoyé alors qu'il était incomplet : ce qu'il manquait, puis, une fois complété,
  * le rappel de le renvoyer à la comptabilité.
  */
@@ -543,6 +556,25 @@ fun rememberSendAction(vm: AppViewModel, i: Intervention, todos: List<Todo>, onJ
 }
 
 // ------------------------------------------------------------------ aperçu de la page
+
+/** Miniature de la page 1 du bon, telle qu'elle partira (saisies et signature comprises). */
+@Composable
+fun BonThumbnail(i: Intervention, source: File?, modifier: Modifier = Modifier) {
+    val measure = rememberMeasure()
+    val ops = remember(i) { PageOps.build(i, measure) }
+    val (pageW, pageH) = PageOps.pageSize(i)
+    val background = rememberThumbnailBackground(i, source)
+    val shape = RoundedCornerShape(4.dp)
+    Box(
+        modifier
+            .aspectRatio(pageW / pageH)
+            .shadow(3.dp, shape)
+            .clip(shape)
+            .background(Color.White),
+    ) {
+        if (background != null) PagePreview(pageW, pageH, background, ops, Modifier.fillMaxSize())
+    }
+}
 
 /** Page 1 sur fond sombre (aperçu non interactif) ; un appui ouvre l'ajustement. */
 @Composable

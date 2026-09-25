@@ -55,6 +55,23 @@ object PageBitmaps {
         val key = file.path + ":" + file.lastModified()
         cache.get(key) ?: PdfPages.render(file, 0, RENDER_WIDTH).also { cache.put(key, it) }
     }
+
+    // Miniatures de la liste des bons : petites, gardées à part (16 Mo au plus)
+    private const val THUMB_WIDTH = 280
+    private val thumbs = object : LruCache<String, Bitmap>(16 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap) = value.byteCount / 1024
+    }
+
+    suspend fun fpsThumbnail(context: Context): Bitmap = withContext(Dispatchers.IO) {
+        thumbs.get("fps") ?: fps(context).let { full ->
+            Bitmap.createScaledBitmap(full, THUMB_WIDTH, (full.height * THUMB_WIDTH.toFloat() / full.width).roundToInt(), true)
+        }.also { thumbs.put("fps", it) }
+    }
+
+    suspend fun thumbnail(file: File): Bitmap = withContext(Dispatchers.IO) {
+        val key = file.path + ":" + file.lastModified()
+        thumbs.get(key) ?: PdfPages.render(file, 0, THUMB_WIDTH).also { thumbs.put(key, it) }
+    }
 }
 
 @Composable
@@ -66,6 +83,24 @@ fun rememberPageBackground(i: Intervention, sourceFile: File?): ImageBitmap? {
             when (i.type) {
                 InterventionType.FPS -> PageBitmaps.fps(context)
                 InterventionType.DOCUMENT -> sourceFile?.let { PageBitmaps.firstPage(it) }
+            }?.asImageBitmap()
+        } catch (_: Throwable) {
+            null
+        }
+    }
+    return bmp
+}
+
+/** Fond de la miniature d'un bon (liste de l'accueil). */
+@Composable
+fun rememberThumbnailBackground(i: Intervention, sourceFile: File?): ImageBitmap? {
+    val context = LocalContext.current
+    val key = if (i.type == InterventionType.FPS) "fps" else sourceFile?.path
+    val bmp by produceState<ImageBitmap?>(null, key) {
+        value = try {
+            when (i.type) {
+                InterventionType.FPS -> PageBitmaps.fpsThumbnail(context)
+                InterventionType.DOCUMENT -> sourceFile?.let { PageBitmaps.thumbnail(it) }
             }?.asImageBitmap()
         } catch (_: Throwable) {
             null

@@ -11,24 +11,28 @@ import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import fr.vippneus.intervention.ui.AppRoot
 import fr.vippneus.intervention.ui.AppViewModel
-import fr.vippneus.intervention.ui.VipTheme
+import fr.vippneus.intervention.ui.VipApp
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Barres de titre graphite : icônes de la barre d'état en blanc
-        enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
-            navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
-        )
+        systemBars(dark = false)
         if (savedInstanceState == null) handleIntent(intent)
         setContent {
-            VipTheme { AppRoot(vm) }
+            VipApp(vm, onDarkChange = ::systemBars)
         }
+    }
+
+    /** Barres de titre graphite : icônes de la barre d'état en blanc ; barre de navigation selon l'apparence. */
+    private fun systemBars(dark: Boolean) {
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
+            navigationBarStyle = if (dark) SystemBarStyle.dark(Color.TRANSPARENT)
+            else SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT),
+        )
     }
 
     override fun onNewIntent(intent: Intent) {

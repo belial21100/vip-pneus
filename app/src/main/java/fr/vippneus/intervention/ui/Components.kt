@@ -768,7 +768,14 @@ fun ProgressRing(done: Int, total: Int, modifier: Modifier = Modifier, size: Dp 
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TodoPanel(todos: List<Todo>, onJump: (Todo) -> Unit, modifier: Modifier = Modifier) {
+fun TodoPanel(
+    todos: List<Todo>,
+    onJump: (Todo) -> Unit,
+    modifier: Modifier = Modifier,
+    /** Tout est rempli : bouton d'envoi dans le cadre (absent si null). */
+    onSend: (() -> Unit)? = null,
+    sendLabel: String = "Envoyer à la compta",
+) {
     if (todos.isEmpty()) return
     val c = Vip.colors
     val missing = todos.filterNot { it.done }
@@ -798,6 +805,10 @@ fun TodoPanel(todos: List<Todo>, onJump: (Todo) -> Unit, modifier: Modifier = Mo
                         style = MaterialTheme.typography.bodyMedium,
                         color = c.muted,
                     )
+                }
+                if (complete && onSend != null) {
+                    Spacer(Modifier.width(12.dp))
+                    VipButton(sendLabel, onSend, icon = Icons.AutoMirrored.Filled.Send, compact = true)
                 }
             }
             if (!complete) {
