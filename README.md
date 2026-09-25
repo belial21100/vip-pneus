@@ -31,15 +31,18 @@ Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office
 
 ### Sur la tablette
 
-1. **Importer un PDF client** (ou « Ouvrir avec / Partager → VIP Pneus » depuis la
-   messagerie), ou **Nouvelle fiche d'intervention** pour une fiche vierge.
-2. Vérifier et compléter les champs ; l'aperçu de la page se met à jour en direct.
-3. **Faire signer** le client au doigt ou au stylet.
+1. **Importer un PDF client** (bouton jaune de l'accueil, ou « Ouvrir avec / Partager →
+   VIP Pneus » depuis la messagerie), ou **Nouvelle fiche vierge**.
+2. Les champs lus dans le document sont surlignés en jaune (✦) : les vérifier. Le cadre
+   **À compléter** liste ce qui manque encore (horamètre, serrage, signature…) ; un appui
+   mène directement au champ. L'aperçu de la page se met à jour en direct.
+3. **Faire signer** le client au doigt ou au stylet (son nom se saisit dans la même fenêtre).
 4. Au besoin, **Ajuster** : déplacer un texte, changer sa taille, ajouter une mention,
    une date, une croix ou une signature n'importe où sur la page (pincer pour zoomer).
-5. **Envoyer** : le PDF est créé (nom de fichier automatique, modifiable) et la
-   messagerie s'ouvre avec l'adresse de la comptabilité, l'objet et la pièce jointe.
-   Plusieurs bons peuvent être envoyés ensemble (appui long dans la liste).
+5. **Envoyer à la compta** (barre du bas, avec le nom du fichier) : s'il manque quelque
+   chose, l'application le signale avant ; le PDF est créé et la messagerie s'ouvre avec
+   l'adresse de la comptabilité, l'objet et la pièce jointe. Plusieurs bons peuvent être
+   envoyés ensemble (appui long dans la liste).
 
 Des photos (bon papier, pneus…) et d'autres PDF peuvent être ajoutés à la suite de la fiche.
 
@@ -55,7 +58,7 @@ fichiers), e-mail de la comptabilité, copie éventuelle et message de l'e-mail.
 
 ## Installation sur les tablettes
 
-1. Copier le fichier `vip-pneus-1.0.0.apk` sur la tablette (e-mail, clé USB, Drive…).
+1. Copier le fichier `vip-pneus-<version>.apk` sur la tablette (e-mail, clé USB, Drive…).
 2. L'ouvrir ; accepter « Installer des applications inconnues » pour l'application
    utilisée (Fichiers, Gmail…).
 3. Au premier lancement, ouvrir **Réglages** et renseigner le technicien et l'e-mail
@@ -77,8 +80,10 @@ désinstaller l'application (et perdre les bons enregistrés) pour installer une
   - `pdf/Layout.kt` : mise en page commune à l'aperçu écran et au PDF (ce que l'on voit
     est ce que l'on obtient) ; `pdf/PdfExporter.kt` : création du PDF final ;
   - `importer/` : lecture du texte positionné des PDF, reconnaissance des documents
-    clients et pré-remplissage (`ClientDocs.kt`), détection d'une fiche FPS en 1re page ;
-  - `ui/` : écrans (liste, fiche, document client, éditeur de page, signature, réglages).
+    clients et pré-remplissage (`ClientDocs.kt`) ;
+  - `data/Completion.kt` : ce qu'il reste à remplir sur un bon (cadre « À compléter ») ;
+  - `ui/` : écrans (accueil, fiche, document client, éditeur de page, signature, réglages) ;
+    `Theme.kt` (graphite et jaune, police Barlow) et `Components.kt` (éléments communs).
 - `app/src/main/assets/templates/fiche_presse_mobile.jpg` : fiche vierge (fond de page).
 
 ### Construire

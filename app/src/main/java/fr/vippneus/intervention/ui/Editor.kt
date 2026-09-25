@@ -17,6 +17,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -32,19 +37,17 @@ import androidx.compose.material.icons.filled.FitScreen
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.TouchApp
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -61,9 +64,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -120,10 +125,11 @@ class EditorState {
         if (undo.size > 60) undo.removeAt(0)
     }
 
-    fun zoomBy(factor: Float, focus: Offset, view: Size, fit: Size) {
+    /** Zoom autour de [focus] ; [center] = centre de la page à 100 %, [fit] = taille de la page à 100 %. */
+    fun zoomBy(factor: Float, focus: Offset, center: Offset, fit: Size) {
         val z = zoom
         val z2 = (z * factor).coerceIn(1f, 6f)
-        val c = Offset(view.width / 2f, view.height / 2f)
+        val c = center
         val tl = c + pan - Offset(fit.width * z / 2f, fit.height * z / 2f)
         val p = (focus - tl) / z
         val tl2 = focus - p * z2
@@ -152,7 +158,7 @@ fun PageEditor(
     val (pageW, pageH) = PageOps.pageSize(intervention)
     val background = rememberPageBackground(intervention, vm.sourceFile(intervention))
     val renderer = rememberRenderer()
-    val primary = MaterialTheme.colorScheme.primary
+    val selectionColor = Palette.AmberDeep
     val settings by vm.settings.collectAsStateWithLifecycle()
 
     var textDialog by remember { mutableStateOf<TextDialogRequest?>(null) }
@@ -217,65 +223,30 @@ fun PageEditor(
         if (state.tool != Tool.NONE && state.tool != Tool.TEXT && state.tool != Tool.SIGNATURE) state.tool = Tool.NONE
     }
 
+    val c = Vip.colors
     Column(modifier) {
-        // Barre d'outils
-        Surface(tonalElevation = 2.dp) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ToolChip(state, Tool.TEXT, Icons.Filled.TextFields)
-                ToolChip(state, Tool.DATE, Icons.Filled.DateRange)
-                ToolChip(state, Tool.CROSS, Icons.Filled.Close)
-                ToolChip(state, Tool.SIGNATURE, Icons.Filled.Draw)
-                VerticalDivider(Modifier.height(28.dp))
-                IconButton(
-                    onClick = {
-                        state.undo.removeLastOrNull()?.let { s -> vm.update(id) { it.restore(s) } }
-                    },
-                    enabled = state.undo.isNotEmpty(),
-                ) { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Annuler la dernière modification") }
-                IconButton(onClick = { state.zoom = min(6f, state.zoom * 1.5f) }) { Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom +") }
-                IconButton(onClick = {
-                    state.zoom = max(1f, state.zoom / 1.5f)
-                    if (state.zoom <= 1.001f) state.pan = Offset.Zero
-                }) { Icon(Icons.Filled.ZoomOut, contentDescription = "Zoom −") }
-                IconButton(onClick = { state.zoom = 1f; state.pan = Offset.Zero }) { Icon(Icons.Filled.FitScreen, contentDescription = "Page entière") }
-            }
-        }
-        if (state.tool != Tool.NONE) {
-            Surface(color = MaterialTheme.colorScheme.secondaryContainer) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(state.tool.hint, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSecondaryContainer)
-                    IconButton(onClick = { state.tool = Tool.NONE }) { Icon(Icons.Filled.Close, contentDescription = "Annuler l'outil") }
-                }
-            }
-        }
-
-        // Page
+        // Page, sur fond sombre, avec la palette d'outils flottante
         BoxWithConstraints(
             Modifier
                 .weight(1f)
                 .fillMaxWidth()
                 .clipToBounds()
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                .background(c.canvas),
         ) {
             val density = LocalDensity.current
             val viewW = with(density) { maxWidth.toPx() }
             val viewH = with(density) { maxHeight.toPx() }
-            val margin = with(density) { 12.dp.toPx() }
-            val fitScale = min((viewW - 2 * margin) / pageW, (viewH - 2 * margin) / pageH).coerceAtLeast(0.05f)
+            val margin = with(density) { 20.dp.toPx() }
+            val top = with(density) { 84.dp.toPx() }
+            val fitScale = min((viewW - 2 * margin) / pageW, (viewH - top - margin) / pageH).coerceAtLeast(0.05f)
             val fit = Size(pageW * fitScale, pageH * fitScale)
             val scale = fitScale * state.zoom
-            val topLeft = Offset(viewW / 2f, viewH / 2f) + state.pan - Offset(fit.width * state.zoom / 2f, fit.height * state.zoom / 2f)
+            val center = Offset(viewW / 2f, top + (viewH - top - margin) / 2f)
+            val topLeft = center + state.pan - Offset(fit.width * state.zoom / 2f, fit.height * state.zoom / 2f)
             val touchTol = with(density) { 10.dp.toPx() } / scale
 
             val currentFit by rememberUpdatedState(fit)
-            val currentView by rememberUpdatedState(Size(viewW, viewH))
+            val currentCenter by rememberUpdatedState(center)
             val currentScale by rememberUpdatedState(scale)
             val currentTopLeft by rememberUpdatedState(topLeft)
             val currentTol by rememberUpdatedState(touchTol)
@@ -314,7 +285,7 @@ fun PageEditor(
                                     val panChange = event.calculatePan()
                                     val centroid = event.calculateCentroid(useCurrent = true)
                                     if (centroid != Offset.Unspecified) {
-                                        state.zoomBy(zoomChange, centroid, currentView, currentFit)
+                                        state.zoomBy(zoomChange, centroid, currentCenter, currentFit)
                                     }
                                     if (state.zoom > 1.001f) state.pan += panChange
                                     event.changes.forEach { it.consume() }
@@ -350,17 +321,77 @@ fun PageEditor(
                     },
             ) {
                 val pageSize = Size(pageW * scale, pageH * scale)
-                // ombre légère
-                drawRect(Color.Black.copy(alpha = 0.12f), topLeft + Offset(4f, 5f), pageSize)
+                // ombre portée
+                drawRect(Color.Black.copy(alpha = 0.25f), topLeft + Offset(0f, 6f), pageSize)
+                drawRect(Color.Black.copy(alpha = 0.12f), topLeft + Offset(-3f, 3f), Size(pageSize.width + 6f, pageSize.height + 8f))
                 drawPage(renderer, background, ops, topLeft, pageSize, pageW)
                 state.selected?.let { key ->
-                    ops.firstOrNull { it.key == key }?.let { drawSelection(it.bounds, topLeft, scale, primary) }
+                    ops.firstOrNull { it.key == key }?.let { drawSelection(it.bounds, topLeft, scale, selectionColor) }
                 }
             }
             if (background == null) {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
-                    Text("Chargement de la page…", modifier = Modifier.padding(top = 12.dp))
+                    CircularProgressIndicator(color = c.accent)
+                    Text("Chargement de la page…", color = c.onChrome, modifier = Modifier.padding(top = 12.dp))
+                }
+            }
+
+            // Palette d'outils
+            Column(
+                Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 14.dp, start = 12.dp, end = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Surface(
+                    color = c.chrome,
+                    contentColor = c.onChrome,
+                    shape = RoundedCornerShape(18.dp),
+                    shadowElevation = 10.dp,
+                ) {
+                    Row(
+                        Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        ToolButton(state, Tool.TEXT, Icons.Filled.TextFields)
+                        ToolButton(state, Tool.DATE, Icons.Filled.DateRange)
+                        ToolButton(state, Tool.CROSS, Icons.Filled.Close)
+                        ToolButton(state, Tool.SIGNATURE, Icons.Filled.Draw)
+                        Box(
+                            Modifier
+                                .padding(horizontal = 6.dp)
+                                .width(1.dp)
+                                .height(28.dp)
+                                .background(c.onChrome.copy(alpha = 0.2f)),
+                        )
+                        IconButton(
+                            onClick = {
+                                state.undo.removeLastOrNull()?.let { s -> vm.update(id) { it.restore(s) } }
+                            },
+                            enabled = state.undo.isNotEmpty(),
+                            colors = IconButtonDefaults.iconButtonColors(contentColor = c.onChrome, disabledContentColor = c.onChrome.copy(alpha = 0.3f)),
+                        ) { Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "Annuler la dernière modification") }
+                        IconButton(onClick = {
+                            state.zoom = max(1f, state.zoom / 1.5f)
+                            if (state.zoom <= 1.001f) state.pan = Offset.Zero
+                        }) { Icon(Icons.Filled.ZoomOut, contentDescription = "Zoom −") }
+                        IconButton(onClick = { state.zoom = min(6f, state.zoom * 1.5f) }) { Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom +") }
+                        IconButton(onClick = { state.zoom = 1f; state.pan = Offset.Zero }) { Icon(Icons.Filled.FitScreen, contentDescription = "Page entière") }
+                    }
+                }
+                if (state.tool != Tool.NONE) {
+                    Surface(color = c.accent, contentColor = Palette.Graphite900, shape = CircleShape, shadowElevation = 6.dp) {
+                        Row(Modifier.padding(start = 18.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.TouchApp, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(state.tool.hint, style = MaterialTheme.typography.labelLarge)
+                            IconButton(onClick = { state.tool = Tool.NONE }) { Icon(Icons.Filled.Close, contentDescription = "Annuler l'outil") }
+                        }
+                    }
                 }
             }
         }
@@ -368,7 +399,6 @@ fun PageEditor(
         // Réglages de l'élément sélectionné
         val selectedOp = state.selected?.let { key -> ops.firstOrNull { it.key == key } }
         if (selectedOp != null) {
-            HorizontalDivider()
             SelectionBar(
                 op = selectedOp,
                 overlay = overlay(selectedOp.key),
@@ -472,7 +502,7 @@ fun PageEditor(
         SignatureDialog(
             title = "Signature",
             onDismiss = { signatureAt = null; state.tool = Tool.NONE },
-            onDone = { sig ->
+            onDone = { sig, _ ->
                 signatureAt = null
                 state.tool = Tool.NONE
                 if (sig != null) {
@@ -495,9 +525,9 @@ fun PageEditor(
         SignatureDialog(
             title = "Signature du client",
             onDismiss = { redoFpsSignature = false },
-            onDone = { sig ->
+            onDone = { sig, _ ->
                 redoFpsSignature = false
-                edit { it.copy(signature = sig) }
+                if (sig != null) edit { it.copy(signature = sig) }
             },
         )
     }
@@ -521,16 +551,29 @@ fun quickInserts(technicien: String): List<Pair<String, String>> = buildList {
 }
 
 @Composable
-private fun ToolChip(state: EditorState, tool: Tool, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    FilterChip(
-        selected = state.tool == tool,
+private fun ToolButton(state: EditorState, tool: Tool, icon: ImageVector) {
+    val c = Vip.colors
+    val selected = state.tool == tool
+    Surface(
         onClick = {
-            state.tool = if (state.tool == tool) Tool.NONE else tool
+            state.tool = if (selected) Tool.NONE else tool
             state.selected = null
         },
-        label = { Text(tool.label) },
-        leadingIcon = { Icon(icon, contentDescription = null) },
-    )
+        shape = RoundedCornerShape(12.dp),
+        color = if (selected) c.accent else Color.Transparent,
+        contentColor = if (selected) Palette.Graphite900 else c.onChrome,
+    ) {
+        Row(
+            Modifier
+                .heightIn(min = 44.dp)
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(tool.label, style = MaterialTheme.typography.labelLarge)
+        }
+    }
 }
 
 @Composable
@@ -556,63 +599,74 @@ private fun SelectionBar(
         op.key == FpsTemplate.K.SIGNATURE -> "Signature du client"
         else -> PageOps.fieldLabel(intervention, op.key) ?: "Élément"
     }
-    Surface(tonalElevation = 3.dp) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.width(170.dp),
-            )
-            when (op) {
-                is TextOp -> {
-                    FilledTonalIconButton(onClick = { onFontSize((op.size - 1f).coerceAtLeast(MIN_FONT)) }) {
-                        Icon(Icons.Filled.Remove, contentDescription = "Texte plus petit")
-                    }
-                    Text("${op.size.roundToInt()} pt", style = MaterialTheme.typography.labelLarge)
-                    FilledTonalIconButton(onClick = { onFontSize((op.size + 1f).coerceAtMost(MAX_FONT)) }) {
-                        Icon(Icons.Filled.Add, contentDescription = "Texte plus grand")
-                    }
-                    OutlinedButton(onClick = onEditText) {
-                        Icon(Icons.Filled.Edit, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Modifier")
-                    }
+    val c = Vip.colors
+    Surface(color = c.card, shadowElevation = 12.dp) {
+        Column {
+            HorizontalDivider(color = c.cardBorder)
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(Modifier.width(170.dp)) {
+                    Text("Sélection", style = MaterialTheme.typography.labelMedium, color = c.muted)
+                    Text(label, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                is CrossOp, is SignatureOp -> {
-                    FilledTonalIconButton(onClick = { onScale(1f / 1.15f) }) { Icon(Icons.Filled.Remove, contentDescription = "Plus petit") }
-                    FilledTonalIconButton(onClick = { onScale(1.15f) }) { Icon(Icons.Filled.Add, contentDescription = "Plus grand") }
-                    if (op is SignatureOp) {
-                        OutlinedButton(onClick = onRedoSignature) {
-                            Icon(Icons.Filled.Draw, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text("Refaire")
+                when (op) {
+                    is TextOp -> {
+                        Stepper(
+                            text = "${op.size.roundToInt()} pt",
+                            onMinus = { onFontSize((op.size - 1f).coerceAtLeast(MIN_FONT)) },
+                            onPlus = { onFontSize((op.size + 1f).coerceAtMost(MAX_FONT)) },
+                            minusLabel = "Texte plus petit",
+                            plusLabel = "Texte plus grand",
+                        )
+                        VipButton("Modifier le texte", onEditText, icon = Icons.Filled.Edit, tone = Tone.GHOST, compact = true)
+                    }
+                    is CrossOp, is SignatureOp -> {
+                        Stepper(
+                            text = "Taille",
+                            onMinus = { onScale(1f / 1.15f) },
+                            onPlus = { onScale(1.15f) },
+                            minusLabel = "Plus petit",
+                            plusLabel = "Plus grand",
+                        )
+                        if (op is SignatureOp) {
+                            VipButton("Refaire", onRedoSignature, icon = Icons.Filled.Draw, tone = Tone.GHOST, compact = true)
                         }
                     }
                 }
-            }
-            if (isFpsElement) {
-                OutlinedButton(onClick = onReset) {
-                    Icon(Icons.Filled.RestartAlt, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("Position d'origine")
+                if (isFpsElement) {
+                    VipButton("Position d'origine", onReset, icon = Icons.Filled.RestartAlt, tone = Tone.GHOST, compact = true)
                 }
+                VipButton(if (isFpsElement) "Effacer" else "Supprimer", onDelete, icon = Icons.Filled.Delete, tone = Tone.DANGER, compact = true)
+                IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Désélectionner") }
             }
-            OutlinedButton(onClick = onDelete) {
-                Icon(Icons.Filled.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                Spacer(Modifier.width(6.dp))
-                Text(if (isFpsElement) "Effacer" else "Supprimer", color = MaterialTheme.colorScheme.error)
-            }
-            Box(Modifier.width(4.dp))
-            IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = "Désélectionner") }
         }
+    }
+}
+
+/** − valeur + */
+@Composable
+private fun Stepper(text: String, onMinus: () -> Unit, onPlus: () -> Unit, minusLabel: String, plusLabel: String) {
+    val c = Vip.colors
+    Row(
+        Modifier
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp))
+            .padding(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(onClick = onMinus) { Icon(Icons.Filled.Remove, contentDescription = minusLabel) }
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.widthIn(min = 52.dp),
+            textAlign = TextAlign.Center,
+        )
+        IconButton(onClick = onPlus) { Icon(Icons.Filled.Add, contentDescription = plusLabel, tint = c.onAccentSoft) }
     }
 }

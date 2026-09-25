@@ -303,34 +303,38 @@ object ClientDocs {
 
             fun f(
                 anchor: Run?, key: String, label: String, dx0: Float, dy0: Float, dx1: Float, dy1: Float, size: Float,
-                hint: String = "", numeric: Boolean = false, unit: String = "",
+                hint: String = "", numeric: Boolean = false, unit: String = "", required: Boolean = false,
             ) = anchor?.let {
-                PlacedField(PREFIX + key, label, it.x0 + dx0, it.baseline + dy0, it.x0 + dx1, it.baseline + dy1, size, hint = hint, numeric = numeric, unit = unit)
+                PlacedField(
+                    PREFIX + key, label, it.x0 + dx0, it.baseline + dy0, it.x0 + dx1, it.baseline + dy1, size,
+                    hint = hint, numeric = numeric, unit = unit, required = required,
+                )
             }
 
             val torque = t.lines(p).firstNotNullOfOrNull { Regex("""=\s*(\d+)\s*Nm\s*\(\+/-\s*(\d+)""").find(it) }
             val hour = t.lines(p).firstNotNullOfOrNull { Regex("""(?i)Horam[eè]tre\s*:?\s*(\d+)\s*h""").find(it) }
 
+            // Ordre de saisie : d'abord ce que le technicien relève sur place
             val fields = listOfNotNull(
-                f(instructions, "lieu", "Lieu d'intervention (si différent)", 126f, -2.2f, 318f, 20f, 24f),
-                f(instructions, "lieuAdresse", "Adresse du lieu d'intervention", 122f, 38.8f, 418f, 53.2f, 13f),
-                f(
-                    couple, "couple", "Couple de serrage (Nm)", 79.8f, -10f, 237.8f, 8f, 13f,
-                    hint = torque?.let { "Préconisé : ${it.groupValues[1]} Nm (± ${it.groupValues[2]} Nm)" } ?: "",
-                    numeric = true, unit = "Nm",
-                ),
                 f(
                     lecture, "compteur", "Lecture du compteur (h)", 114f, -10.6f, 202f, 9.2f, 17f,
                     hint = hour?.let { "Horamètre indiqué sur la demande : ${it.groupValues[1]} h" } ?: "",
-                    numeric = true, unit = "h",
+                    numeric = true, unit = "h", required = true,
                 ),
-                f(monteur, "monteur", "Monteur", 91.7f, -11.6f, 188.7f, 8.2f, 17f),
+                f(
+                    couple, "couple", "Couple de serrage (Nm)", 79.8f, -10f, 237.8f, 8f, 13f,
+                    hint = torque?.let { "Préconisé : ${it.groupValues[1]} Nm (± ${it.groupValues[2]} Nm)" } ?: "",
+                    numeric = true, unit = "Nm", required = true,
+                ),
+                f(monteur, "monteur", "Monteur", 91.7f, -11.6f, 188.7f, 8.2f, 17f, required = true),
+                f(date, "date", "Date", 48f, -5.7f, 228f, 12.5f, 20f, required = true),
                 f(arrivee, "heureArrivee", "Heure d'arrivée", 114f, -12.2f, 202f, 8.2f, 14f),
                 f(depart, "heureDepart", "Heure de départ", 91.7f, -12.2f, 188.7f, 8.2f, 14f),
                 f(terminee, "dateTerminee", "Date terminée", 114f, -11.9f, 202f, 10.2f, 14f),
                 f(duree, "duree", "Durée", 91.7f, -11.3f, 188.7f, 10.8f, 14f),
-                f(date, "date", "Date", 48f, -5.7f, 228f, 12.5f, 20f),
-                f(recu, "recuPar", "Reçu par (nom du client)", 90f, 12f, 240f, 26f, 15f),
+                f(instructions, "lieu", "Lieu d'intervention (si différent)", 126f, -2.2f, 318f, 20f, 24f),
+                f(instructions, "lieuAdresse", "Adresse du lieu d'intervention", 122f, 38.8f, 418f, 53.2f, 13f),
+                f(recu, "recuPar", "Reçu par (nom du client)", 90f, 12f, 240f, 26f, 15f, required = true),
             )
             val signature = recu?.let { PlacedBox(it.x0 + 240f, it.baseline - 23f, it.x0 + 348f, it.baseline + 21f) }
             val template = DocTemplate("interfit", "Feuille de tâche Mastra", fields, signature)

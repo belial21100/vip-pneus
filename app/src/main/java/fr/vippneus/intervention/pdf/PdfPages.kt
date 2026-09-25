@@ -38,13 +38,15 @@ object PdfPages {
     }
 
     fun pageCount(file: File): Int = synchronized(renderLock) {
-        try {
+        val native = try {
             ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
                 PdfRenderer(pfd).use { it.pageCount }
             }
-        } catch (_: Exception) {
-            PDDocument.load(file).use { it.numberOfPages }
+        } catch (_: Throwable) {
+            // Rendu natif indisponible : on compte avec PDFBox
+            0
         }
+        if (native > 0) native else PDDocument.load(file).use { it.numberOfPages }
     }
 
     /** Rendu d'une page en image, largeur imposée (rendu natif Android, sinon PDFBox). */

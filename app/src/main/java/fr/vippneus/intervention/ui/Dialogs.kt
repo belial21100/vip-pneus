@@ -1,8 +1,11 @@
 package fr.vippneus.intervention.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,20 +13,29 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Draw
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,58 +54,80 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import fr.vippneus.intervention.data.SignatureData
+import fr.vippneus.intervention.pdf.Fonts
 import kotlin.math.roundToInt
 
 /**
- * Saisie d'une signature au doigt ou au stylet.
- * [onDone] reçoit null si le cadre a été laissé vide.
+ * Saisie d'une signature au doigt ou au stylet, avec le nom du signataire si [nameLabel] est donné.
+ * [onDone] reçoit null si le cadre a été laissé vide, et le nom saisi (null sans champ nom).
  */
 @Composable
 fun SignatureDialog(
     title: String,
     onDismiss: () -> Unit,
-    onDone: (SignatureData?) -> Unit,
+    onDone: (SignatureData?, String?) -> Unit,
+    nameLabel: String? = null,
+    initialName: String = "",
 ) {
     val strokes = remember { mutableStateListOf<List<Offset>>() }
     val current = remember { mutableStateListOf<Offset>() }
     var padSize by remember { mutableStateOf(IntSize.Zero) }
+    var name by remember { mutableStateOf(initialName) }
     val penPx = with(LocalDensity.current) { 3.dp.toPx() }
     val ink = Color(0xFF14171C)
+    val c = Vip.colors
+    val empty = strokes.isEmpty() && current.isEmpty()
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
+            color = c.card,
             modifier = Modifier
                 .fillMaxWidth(0.94f)
-                .widthIn(max = 980.dp),
+                .widthIn(max = 1000.dp),
         ) {
-            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(title, style = MaterialTheme.typography.titleLarge)
-                Text(
-                    "Signez dans le cadre blanc avec le doigt ou un stylet.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconBadge(Icons.Filled.Draw)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(title, style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            "Faites signer dans le cadre blanc, avec le doigt ou un stylet.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = c.muted,
+                        )
+                    }
+                }
+                if (nameLabel != null) {
+                    VipField(
+                        label = nameLabel,
+                        value = name,
+                        onValueChange = { name = it },
+                        capitalization = KeyboardCapitalization.Words,
+                    )
+                }
                 Box(
                     Modifier
                         .fillMaxWidth()
-                        .aspectRatio(2.6f)
+                        .aspectRatio(2.7f)
                         .background(Color.White, MaterialTheme.shapes.medium)
-                        .border(1.dp, MaterialTheme.colorScheme.outline, MaterialTheme.shapes.medium)
+                        .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), MaterialTheme.shapes.medium)
                         .onSizeChanged { padSize = it }
                         .pointerInput(Unit) {
                             awaitEachGesture {
@@ -116,8 +150,8 @@ fun SignatureDialog(
                 ) {
                     Canvas(Modifier.matchParentSize()) {
                         // Ligne de signature
-                        val y = size.height * 0.78f
-                        drawLine(Color(0xFFCBD2DC), Offset(size.width * 0.06f, y), Offset(size.width * 0.94f, y), strokeWidth = 2f)
+                        val y = size.height * 0.76f
+                        drawLine(Color(0xFFCBD2DC), Offset(size.width * 0.05f, y), Offset(size.width * 0.95f, y), strokeWidth = 2f)
                         val style = Stroke(width = penPx, cap = StrokeCap.Round, join = StrokeJoin.Round)
                         (strokes + listOf(current.toList())).forEach { pts ->
                             if (pts.isEmpty()) return@forEach
@@ -133,20 +167,33 @@ fun SignatureDialog(
                             drawPath(path, ink, style = style)
                         }
                     }
+                    if (empty) {
+                        // « ✕ Signer ici » posé juste au-dessus de la ligne de signature
+                        Column(
+                            Modifier
+                                .matchParentSize()
+                                .padding(start = 28.dp),
+                        ) {
+                            Spacer(Modifier.weight(0.64f))
+                            Text("✕  Signer ici", style = MaterialTheme.typography.titleMedium, color = Color(0xFFABB2BB))
+                            Spacer(Modifier.weight(0.24f))
+                        }
+                    }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    TextButton(onClick = { strokes.clear(); current.clear() }) { Text("Effacer") }
+                    VipButton("Effacer", { strokes.clear(); current.clear() }, icon = Icons.Filled.Delete, tone = Tone.GHOST, enabled = !empty)
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onDismiss) { Text("Annuler") }
-                    Button(onClick = {
+                    TextButton(onClick = onDismiss, modifier = Modifier.heightIn(min = 52.dp)) { Text("Annuler", style = MaterialTheme.typography.labelLarge) }
+                    VipButton("Valider la signature", {
                         val data = strokes.filter { it.isNotEmpty() }.map { pts ->
                             pts.flatMap { listOf(round1(it.x), round1(it.y)) }
                         }
                         onDone(
                             if (data.isEmpty()) null
-                            else SignatureData(data, padSize.width.toFloat(), padSize.height.toFloat(), penPx)
+                            else SignatureData(data, padSize.width.toFloat(), padSize.height.toFloat(), penPx),
+                            if (nameLabel != null) name.trim() else null,
                         )
-                    }) { Text("Valider") }
+                    })
                 }
             }
         }
@@ -174,18 +221,25 @@ fun TextEditDialog(
     var value by remember { mutableStateOf(TextFieldValue(initialText, TextRange(initialText.length))) }
     var size by remember { mutableFloatStateOf(initialSize) }
     val focus = remember { FocusRequester() }
+    val c = Vip.colors
+    val context = LocalContext.current
+    val pdfFont = remember { FontFamily(Fonts.typeface(context)) }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = c.card,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 OutlinedTextField(
                     value = value,
                     onValueChange = { value = it },
                     minLines = 2,
                     maxLines = 6,
+                    shape = MaterialTheme.shapes.small,
+                    colors = vipFieldColors(),
+                    textStyle = MaterialTheme.typography.bodyLarge,
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(focus),
@@ -193,7 +247,7 @@ fun TextEditDialog(
                 if (quickInserts.isNotEmpty()) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(quickInserts) { (label, text) ->
-                            AssistChip(
+                            Surface(
                                 onClick = {
                                     val t = value.text
                                     val start = value.selection.min
@@ -202,26 +256,37 @@ fun TextEditDialog(
                                     val nt = t.substring(0, start) + insert + t.substring(end)
                                     value = TextFieldValue(nt, TextRange(start + insert.length))
                                 },
-                                label = { Text(label) },
-                            )
+                                shape = CircleShape,
+                                color = c.accentSoft,
+                                contentColor = c.onAccentSoft,
+                            ) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
+                                )
+                            }
                         }
                     }
                 }
                 if (showSize) {
                     Text("Taille du texte : ${size.roundToInt()} pt", style = MaterialTheme.typography.labelLarge)
-                    Slider(value = size, onValueChange = { size = it.roundToInt().toFloat() }, valueRange = 6f..48f)
+                    Slider(
+                        value = size,
+                        onValueChange = { size = it.roundToInt().toFloat() },
+                        valueRange = 6f..48f,
+                        colors = SliderDefaults.colors(thumbColor = c.chromeHigh, activeTrackColor = c.chromeHigh),
+                    )
                     Text(
                         value.text.lineSequence().firstOrNull()?.ifBlank { null } ?: "Aperçu",
                         fontSize = (size * 1.1f).coerceAtMost(40f).sp,
-                        fontFamily = FontFamily.SansSerif,
+                        fontFamily = pdfFont,
                         maxLines = 1,
                     )
                 }
             }
         },
-        confirmButton = {
-            FilledTonalButton(onClick = { onConfirm(value.text, size) }) { Text("OK") }
-        },
+        confirmButton = { VipButton("OK", { onConfirm(value.text, size) }, compact = true) },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
     )
 }
@@ -235,15 +300,146 @@ fun ConfirmDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
+    val c = Vip.colors
     AlertDialog(
         onDismissRequest = onDismiss,
+        containerColor = c.card,
+        icon = { Icon(Icons.Filled.Delete, contentDescription = null, tint = c.danger) },
         title = { Text(title) },
         text = { Text(text) },
         confirmButton = {
-            TextButton(onClick = { onConfirm(); onDismiss() }) {
-                Text(confirmLabel, color = MaterialTheme.colorScheme.error)
-            }
+            VipButton(confirmLabel, { onConfirm(); onDismiss() }, tone = Tone.DANGER, compact = true)
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
     )
+}
+
+/** Nom du fichier PDF envoyé (vide = nom automatique). */
+@Composable
+fun FileNameDialog(auto: String, current: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var value by remember { mutableStateOf(current.ifBlank { auto }) }
+    val c = Vip.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = c.card,
+        title = { Text("Nom du fichier PDF") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    suffix = { Text(".pdf") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small,
+                    colors = vipFieldColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text("Nom automatique : $auto.pdf", style = MaterialTheme.typography.bodySmall, color = c.muted)
+                if (value.trim() != auto) {
+                    TextButton(onClick = { value = auto }) { Text("Revenir au nom automatique") }
+                }
+            }
+        },
+        confirmButton = {
+            VipButton("Enregistrer", {
+                val v = value.trim()
+                onConfirm(if (v == auto) "" else v)
+            }, compact = true)
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Annuler") } },
+    )
+}
+
+/** Avant l'envoi : ce qu'il manque sur le bon. */
+@Composable
+fun MissingDialog(missing: List<String>, onDismiss: () -> Unit, onSendAnyway: () -> Unit) {
+    val c = Vip.colors
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = c.card,
+        icon = { Icon(Icons.Filled.Warning, contentDescription = null, tint = c.warning) },
+        title = { Text("Il manque des informations") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Ces éléments ne sont pas encore remplis :", color = c.muted)
+                missing.forEach { label ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(8.dp)
+                                .background(c.accent, CircleShape),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                    }
+                }
+            }
+        },
+        confirmButton = { VipButton("Compléter le bon", onDismiss, compact = true) },
+        dismissButton = { TextButton(onClick = onSendAnyway) { Text("Envoyer quand même") } },
+    )
+}
+
+/** Document non reconnu : fiche presse mobile (document joint) ou écriture directe sur le document. */
+@Composable
+fun ImportChoiceDialog(
+    name: String,
+    onFiche: () -> Unit,
+    onDocument: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val c = Vip.colors
+    Dialog(onDismissRequest = onCancel) {
+        Surface(shape = MaterialTheme.shapes.extraLarge, color = c.card, modifier = Modifier.widthIn(max = 620.dp)) {
+            Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconBadge(Icons.AutoMirrored.Filled.HelpOutline)
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Document non reconnu", style = MaterialTheme.typography.titleLarge)
+                        Text(name, style = MaterialTheme.typography.bodyMedium, color = c.muted, maxLines = 1)
+                    }
+                }
+                Text(
+                    "Ce n'est pas un modèle connu : les informations ne peuvent pas être reprises automatiquement. " +
+                        "Comment voulez-vous le traiter ?",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                ChoiceCard(
+                    Icons.Filled.EditNote,
+                    "Remplir une fiche presse mobile",
+                    "Le document est joint après la fiche, comme pour Conti et Mac2.",
+                    onFiche,
+                )
+                ChoiceCard(
+                    Icons.Filled.Draw,
+                    "Écrire directement sur ce document",
+                    "Texte, date, croix et signature sur la page ; l'original suit en page 2, comme pour Mastra.",
+                    onDocument,
+                )
+                TextButton(onClick = onCancel, modifier = Modifier.align(Alignment.End)) { Text("Annuler") }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChoiceCard(icon: ImageVector, title: String, text: String, onClick: () -> Unit) {
+    val c = Vip.colors
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.large,
+        color = c.card,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(icon, background = c.chromeHigh, tint = c.accent, size = 48.dp)
+            Spacer(Modifier.width(16.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(text, style = MaterialTheme.typography.bodyMedium, color = c.muted)
+            }
+        }
+    }
 }

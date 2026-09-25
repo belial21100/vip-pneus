@@ -81,6 +81,8 @@ data class PlacedField(
     val numeric: Boolean = false,
     /** Unité ajoutée si la valeur saisie n'est qu'un nombre (« 4559 » -> « 4559 h »). */
     val unit: String = "",
+    /** À remplir avant l'envoi (liste « À compléter »). */
+    val required: Boolean = false,
 )
 
 @Serializable
@@ -132,8 +134,13 @@ data class Intervention(
     val fileName: String = "",
     val generatedAt: Long? = null,
     val sentAt: Long? = null,
+    /** Valeurs lues dans le document du client à l'import (à vérifier par le technicien). */
+    val autoValues: Map<String, String> = emptyMap(),
 ) {
     fun value(key: String): String = values[key].orEmpty()
+
+    /** Vrai tant que le champ contient la valeur lue dans le document (non retouchée). */
+    fun isAuto(key: String): Boolean = autoValues[key]?.let { it.isNotBlank() && it == values[key] } ?: false
 }
 
 /** Informations saisies pour un document client (servent au nom du fichier et à la liste). */

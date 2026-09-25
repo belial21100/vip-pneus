@@ -59,6 +59,11 @@ sealed interface Screen {
 data class PendingImport(val id: String, val pdf: File, val name: String, val info: PdfPages.Info, val values: Map<String, String>)
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
+    private companion object {
+        /** Champs remplis d'office (réglages, date du jour) : pas « lus dans le document ». */
+        val DEFAULT_KEYS = setOf(K.MONTEUR, K.DATE, DocKeys.DATE, "if.monteur", "if.date")
+    }
+
     private val repo = InterventionRepository(app.filesDir)
     private val settingsStore = SettingsStore(app)
     private val exporter = PdfExporter(app)
@@ -293,24 +298,30 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    private fun fpsWithDocument(id: String, pdf: File, name: String, info: PdfPages.Info, values: Map<String, String>, recognized: String?) =
-        Intervention(
+    /** Valeurs réellement lues dans le document (hors technicien et date du jour, mis d'office). */
+    private fun extracted(values: Map<String, String>): Map<String, String> =
+        values.filterKeys { it !in DEFAULT_KEYS }.filterValues { it.isNotBlank() }
+
+    private fun fpsWithDocument(id: String, pdf: File, name: String, info: PdfPages.Info, values: Map<String, String>, recognized: String?): Intervention {
+        val fps = values.filterKeys { !it.startsWith("doc.") && !it.startsWith("if.") }
+        return Intervention(
             id = id,
             type = InterventionType.FPS,
             createdAt = System.currentTimeMillis(),
-            values = values.filterKeys { !it.startsWith("doc.") && !it.startsWith("if.") },
+            values = fps,
             recognized = recognized,
+            autoValues = extracted(fps),
             attachments = listOf(
                 Attachment(UUID.randomUUID().toString(), pdf.name, name, AttachmentKind.PDF, info.pageCount),
             ),
         )
+    }
 
     private fun applyPlan(id: String, pdf: File, name: String, info: PdfPages.Info, plan: ImportPlan) {
         when (plan) {
             is ImportPlan.Fiche -> {
                 add(fpsWithDocument(id, pdf, name, info, plan.values, plan.docType))
                 navigate(Screen.Fps(id))
-                message("Fiche remplie automatiquement depuis « ${plan.docType} ». Vérifiez puis complétez horamètre, serrage et signature.")
             }
             is ImportPlan.Feuille -> {
                 add(
@@ -319,6 +330,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                         type = InterventionType.DOCUMENT,
                         createdAt = System.currentTimeMillis(),
                         values = plan.values,
+                        autoValues = extracted(plan.values),
                         template = plan.template,
                         hints = plan.hints,
                         recognized = plan.docType,
@@ -326,7 +338,6 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 )
                 navigate(Screen.Document(id))
-                message("« ${plan.docType} » reconnue : les champs saisis s'écrivent directement sur le document ; l'original suivra en page 2.")
             }
             is ImportPlan.Inconnu -> _pendingImport.value = PendingImport(id, pdf, name, info, plan.values)
         }
@@ -391,19 +402,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 var filled = 0
                 update(id) { cur ->
-                    var values = cur.values
+                    val added = mutableMapOf<String, String>()
                     if (plan is ImportPlan.Fiche) {
                         for ((k, v) in plan.values) {
                             if (k.startsWith("doc.") || k.startsWith("if.")) continue
-                            if (cur.value(k).isBlank() && v.isNotBlank()) {
-                                values = values + (k to v)
-                                filled++
-                            }
+                            if (cur.value(k).isBlank() && v.isNotBlank()) added[k] = v
                         }
                     }
+                    filled = added.size
                     cur.copy(
                         attachments = cur.attachments + att,
-                        values = values,
+                        values = cur.values + added,
+                        autoValues = cur.autoValues + extracted(added),
                         recognized = if (filled > 0) plan?.docType ?: cur.recognized else cur.recognized,
                     )
                 }
