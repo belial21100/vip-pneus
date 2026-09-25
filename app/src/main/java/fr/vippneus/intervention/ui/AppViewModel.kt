@@ -96,10 +96,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val saveJobs = HashMap<String, Job>()
     private val dirty = HashSet<String>()
 
+    /** Écritures disque une par une, toujours avec l'état le plus récent. */
+    private val disk = Dispatchers.IO.limitedParallelism(1)
+
     init {
         viewModelScope.launch {
             val all = withContext(Dispatchers.IO) { repo.loadAll() }
-            _interventions.value = all.sortedByDescending { it.updatedAt }
+            // Un bon a pu être créé pendant le chargement (appli ouverte via « Ouvrir avec ») : on le garde.
+            val current = _interventions.value
+            val known = current.map { it.id }.toSet()
+            _interventions.value = (current + all.filter { it.id !in known }).sortedByDescending { it.updatedAt }
             _loaded.value = true
         }
     }
@@ -161,9 +167,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun persistNow(id: String) {
-        val i = get(id) ?: return
         dirty -= id
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(disk) {
+            // État lu au moment d'écrire : jamais d'ancienne version, rien pour un bon supprimé
+            val i = get(id) ?: return@launch
             runCatching { repo.save(i) }.onFailure { message("Enregistrement impossible : ${it.message}") }
         }
     }
@@ -221,7 +228,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val set = ids.toSet()
         _interventions.value = _interventions.value.filterNot { it.id in set }
         set.forEach { saveJobs.remove(it)?.cancel(); dirty -= it }
-        viewModelScope.launch(Dispatchers.IO) { set.forEach { repo.delete(it) } }
+        viewModelScope.launch(disk) { set.forEach { repo.delete(it) } }
     }
 
     // ---------------------------------------------------------------- import
