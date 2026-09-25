@@ -432,6 +432,11 @@ class UiFlowTest {
         )
         idle(200)
         snap("09d-mastra-page-2")
+        // Cases à remplir : « À compléter », avec l'aide lue sur la demande
+        compose.onNode(hasText("Couple de serrage (Nm)") and hasSetTextAction()).performScrollTo()
+        idle(4)
+        compose.onAllNodesWithText("Préconisé : 159 Nm", substring = true)[0].assertExists()
+        snap("09e-mastra-cases")
     }
 
     @Test
