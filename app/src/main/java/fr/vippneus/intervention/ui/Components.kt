@@ -11,9 +11,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -89,7 +86,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -111,21 +107,41 @@ import java.util.Locale
 
 // ------------------------------------------------------------------ identité
 
-/** Logo VIP (fond transparent : lisible sur fond noir comme sur fond clair). */
+/** Logo (pneu + coche, comme l'icône de l'application). */
 @Composable
-fun BrandLogo(height: Dp, modifier: Modifier = Modifier) {
-    Image(
-        painterResource(R.drawable.logo_vip),
-        contentDescription = "VIP Pneus",
-        contentScale = ContentScale.Fit,
-        modifier = modifier
-            .height(height)
-            .aspectRatio(LOGO_RATIO),
-    )
+fun BrandMark(size: Dp, modifier: Modifier = Modifier) {
+    Box(
+        modifier
+            .size(size)
+            .clip(RoundedCornerShape(size * 0.28f))
+            .background(Palette.Graphite800),
+    ) {
+        Image(
+            painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier
+                .fillMaxSize()
+                .scale(1.55f),
+        )
+    }
 }
 
-/** Largeur / hauteur du logo. */
-private const val LOGO_RATIO = 1449f / 959f
+/** « VIP PNEUS » en capitales condensées. */
+@Composable
+fun Wordmark(modifier: Modifier = Modifier, fontSize: TextUnit = 30.sp, light: Boolean = true) {
+    Text(
+        buildAnnotatedString {
+            withStyle(SpanStyle(color = if (light) Color.White else Palette.Graphite900)) { append("VIP ") }
+            withStyle(SpanStyle(color = if (light) Palette.Amber else Palette.AmberDeep)) { append("PNEUS") }
+        },
+        fontFamily = BarlowCondensed,
+        fontWeight = FontWeight.Bold,
+        fontSize = fontSize,
+        letterSpacing = 1.2.sp,
+        maxLines = 1,
+        modifier = modifier,
+    )
+}
 
 /** Motif de sculpture de pneu (chevrons), en décor discret. */
 @Composable
@@ -164,7 +180,7 @@ fun TreadPattern(modifier: Modifier = Modifier, color: Color = Color.White.copy(
 
 // ------------------------------------------------------------------ barres et boutons
 
-/** Barre de titre noire commune aux écrans (liseré rouge) : retour, titre, statut, actions. */
+/** Barre de titre graphite commune aux écrans : retour, titre, statut, actions. */
 @Composable
 fun VipTopBar(
     title: String,
@@ -172,64 +188,52 @@ fun VipTopBar(
     subtitle: String? = null,
     onBack: (() -> Unit)? = null,
     status: DisplayStatus? = null,
-    underline: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val c = Vip.colors
     Surface(color = c.chrome, contentColor = c.onChrome, modifier = modifier.fillMaxWidth()) {
-        Column {
+        Row(
+            Modifier
+                .statusBarsPadding()
+                .height(72.dp)
+                .padding(start = if (onBack != null) 8.dp else 24.dp, end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (onBack != null) {
+                IconButton(onClick = onBack, modifier = Modifier.size(52.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
+                }
+                Spacer(Modifier.width(6.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (status != null) {
+                        Spacer(Modifier.width(12.dp))
+                        StatusChip(status, onDark = true)
+                    }
+                }
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = c.onChromeMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
             Row(
-                Modifier
-                    .statusBarsPadding()
-                    .height(72.dp)
-                    .padding(start = if (onBack != null) 8.dp else 24.dp, end = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (onBack != null) {
-                    IconButton(onClick = onBack, modifier = Modifier.size(52.dp)) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Retour")
-                    }
-                    Spacer(Modifier.width(6.dp))
-                }
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            title,
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        if (status != null) {
-                            Spacer(Modifier.width(12.dp))
-                            StatusChip(status, onDark = true)
-                        }
-                    }
-                    if (!subtitle.isNullOrBlank()) {
-                        Text(
-                            subtitle,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = c.onChromeMuted,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    content = actions,
-                )
-            }
-            // Liseré rouge, comme le contour du logo (les onglets en tiennent lieu en dessous)
-            if (underline) {
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(c.accent),
-                )
-            }
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                content = actions,
+            )
         }
     }
 }
@@ -330,8 +334,8 @@ fun StatusChip(status: DisplayStatus, modifier: Modifier = Modifier, onDark: Boo
 fun IconBadge(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    background: Color = MaterialTheme.colorScheme.surfaceContainer,
-    tint: Color = MaterialTheme.colorScheme.onSurface,
+    background: Color = Vip.colors.accentSoft,
+    tint: Color = Vip.colors.onAccentSoft,
     size: Dp = 40.dp,
 ) {
     Box(
@@ -483,42 +487,23 @@ fun InfoBanner(
     title: String,
     modifier: Modifier = Modifier,
     text: String? = null,
-    accent: Color = Vip.colors.accent,
+    background: Color = Vip.colors.accentSoft,
+    content: Color = Vip.colors.onAccentSoft,
     action: (@Composable () -> Unit)? = null,
 ) {
-    val c = Vip.colors
-    Surface(
-        color = c.card,
-        shape = MaterialTheme.shapes.large,
-        border = BorderStroke(1.dp, c.cardBorder),
-        modifier = modifier.fillMaxWidth(),
-    ) {
-        Row(Modifier.height(IntrinsicSize.Min)) {
-            // Filet de couleur à gauche, comme le liseré du logo
-            Box(
-                Modifier
-                    .width(5.dp)
-                    .fillMaxHeight()
-                    .background(accent),
-            )
-            Row(
-                Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(icon, contentDescription = null, tint = accent, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(14.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(title, style = MaterialTheme.typography.titleSmall)
-                    if (text != null) {
-                        Text(text, style = MaterialTheme.typography.bodyMedium, color = c.muted)
-                    }
+    Surface(color = background, contentColor = content, shape = MaterialTheme.shapes.large, modifier = modifier.fillMaxWidth()) {
+        Row(Modifier.padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleSmall)
+                if (text != null) {
+                    Text(text, style = MaterialTheme.typography.bodyMedium, color = content.copy(alpha = 0.85f))
                 }
-                if (action != null) {
-                    Spacer(Modifier.width(12.dp))
-                    action()
-                }
+            }
+            if (action != null) {
+                Spacer(Modifier.width(12.dp))
+                action()
             }
         }
     }
@@ -530,7 +515,7 @@ fun RecognizedBanner(docType: String, modifier: Modifier = Modifier, text: Strin
     InfoBanner(
         icon = Icons.Filled.AutoAwesome,
         title = "Rempli automatiquement depuis « $docType »",
-        text = text ?: "Les champs marqués ✦ viennent du document : vérifiez-les, puis complétez le reste.",
+        text = text ?: "Les champs surlignés en jaune viennent du document : vérifiez-les, puis complétez le reste.",
         modifier = modifier,
     )
 }
@@ -584,7 +569,7 @@ fun vipFieldColors(auto: Boolean = false): TextFieldColors {
         unfocusedContainerColor = container,
         disabledContainerColor = container,
         focusedBorderColor = s.primary,
-        unfocusedBorderColor = if (auto) s.outline else s.outlineVariant,
+        unfocusedBorderColor = if (auto) c.accent.copy(alpha = 0.7f) else s.outlineVariant,
         focusedLabelColor = s.primary,
         unfocusedLabelColor = c.muted,
         cursorColor = s.primary,
@@ -622,7 +607,7 @@ fun VipField(
         Icon(
             Icons.Filled.AutoAwesome,
             contentDescription = "Rempli depuis le document",
-            tint = Vip.colors.accent,
+            tint = Palette.AmberDeep,
             modifier = Modifier.size(20.dp),
         )
     }
@@ -786,12 +771,7 @@ fun TodoPanel(todos: List<Todo>, onJump: (Todo) -> Unit, modifier: Modifier = Mo
 @Composable
 private fun TodoChip(t: Todo, onClick: () -> Unit) {
     val c = Vip.colors
-    Surface(
-        onClick = onClick,
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-        contentColor = MaterialTheme.colorScheme.onSurface,
-    ) {
+    Surface(onClick = onClick, shape = CircleShape, color = c.accentSoft, contentColor = c.onAccentSoft) {
         Row(
             Modifier
                 .heightIn(min = 40.dp)
@@ -801,7 +781,6 @@ private fun TodoChip(t: Todo, onClick: () -> Unit) {
             Icon(
                 if (t.key == Completion.SIGNATURE) Icons.Filled.Draw else Icons.Filled.EditNote,
                 contentDescription = null,
-                tint = c.accent,
                 modifier = Modifier.size(18.dp),
             )
             Spacer(Modifier.width(8.dp))

@@ -158,7 +158,6 @@ fun FpsFormScreen(vm: AppViewModel, id: String) {
                 ).joinToString("  ·  "),
                 onBack = { vm.back() },
                 status = i.displayStatus(),
-                underline = wide,
             ) {
                 if (!wide) {
                     VipButton("Ajuster la page", { vm.navigate(Screen.Editor(id)) }, icon = Icons.Filled.Tune, tone = Tone.CHROME, compact = true)

@@ -113,7 +113,6 @@ fun DocumentScreen(vm: AppViewModel, id: String) {
                 ).joinToString("  ·  "),
                 onBack = { vm.back() },
                 status = i.displayStatus(),
-                underline = wide,
             )
             if (!wide) ScreenTabs(listOf("Saisie", "Page 1"), tab) { tab = it }
             Row(
@@ -284,7 +283,8 @@ private fun DocumentForm(
                 title = "Écrivez directement sur la page",
                 text = "Choisissez Texte, Date, Croix ou Signature au-dessus de la page, puis touchez l'endroit voulu. " +
                     "Glissez un élément pour le déplacer.",
-                accent = Palette.Graphite900,
+                background = Vip.colors.infoSoft,
+                content = Vip.colors.info,
             )
         }
 

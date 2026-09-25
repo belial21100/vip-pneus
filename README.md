@@ -83,9 +83,7 @@ désinstaller l'application (et perdre les bons enregistrés) pour installer une
     clients et pré-remplissage (`ClientDocs.kt`) ;
   - `data/Completion.kt` : ce qu'il reste à remplir sur un bon (cadre « À compléter ») ;
   - `ui/` : écrans (accueil, fiche, document client, éditeur de page, signature, réglages) ;
-    `Theme.kt` (noir, rouge et gris du logo VIP, police Barlow) et `Components.kt` (éléments communs).
-- `app/src/main/res/drawable-nodpi/logo_vip.webp` : logo VIP (accueil, réglages) ; icône de
-  l'application dans `res/mipmap-*` (logo sur fond noir).
+    `Theme.kt` (graphite et jaune, police Barlow) et `Components.kt` (éléments communs).
 - `app/src/main/assets/templates/fiche_presse_mobile.jpg` : fiche vierge (fond de page).
 
 ### Construire

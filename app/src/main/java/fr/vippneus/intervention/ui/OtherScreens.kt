@@ -294,7 +294,7 @@ fun SettingsScreen(vm: AppViewModel) {
                 }
                 SectionCard("À propos", icon = Icons.Filled.Info) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        BrandLogo(44.dp)
+                        BrandMark(44.dp)
                         Spacer(Modifier.width(14.dp))
                         Column {
                             Text("VIP Pneus – Bons d'intervention", style = MaterialTheme.typography.titleSmall)

@@ -159,7 +159,7 @@ fun PageEditor(
     val (pageW, pageH) = PageOps.pageSize(intervention)
     val background = rememberPageBackground(intervention, vm.sourceFile(intervention))
     val renderer = rememberRenderer()
-    val selectionColor = Vip.colors.accent
+    val selectionColor = Palette.AmberDeep
     val settings by vm.settings.collectAsStateWithLifecycle()
 
     var textDialog by remember { mutableStateOf<TextDialogRequest?>(null) }
@@ -385,9 +385,9 @@ fun PageEditor(
                     }
                 }
                 if (state.tool != Tool.NONE) {
-                    Surface(color = c.card, contentColor = MaterialTheme.colorScheme.onSurface, shape = CircleShape, shadowElevation = 6.dp) {
+                    Surface(color = c.accent, contentColor = Palette.Graphite900, shape = CircleShape, shadowElevation = 6.dp) {
                         Row(Modifier.padding(start = 18.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.TouchApp, contentDescription = null, tint = c.accent, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Filled.TouchApp, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(state.tool.hint, style = MaterialTheme.typography.labelLarge)
                             IconButton(onClick = { state.tool = Tool.NONE }) { Icon(Icons.Filled.Close, contentDescription = "Annuler l'outil") }
@@ -565,7 +565,7 @@ private fun ToolButton(state: EditorState, tool: Tool, icon: ImageVector) {
         },
         shape = RoundedCornerShape(12.dp),
         color = if (selected) c.accent else Color.Transparent,
-        contentColor = if (selected) c.onAccent else c.onChrome,
+        contentColor = if (selected) Palette.Graphite900 else c.onChrome,
     ) {
         Row(
             Modifier
