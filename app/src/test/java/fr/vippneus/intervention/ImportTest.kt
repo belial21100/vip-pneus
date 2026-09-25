@@ -140,12 +140,12 @@ class ImportTest {
         assertTrue(compteurRun.x0 in 130f..145f && compteurRun.baseline in 478f..492f)
         assertNotNull(text.runs.firstOrNull { it.text == "180 Nm" })
         assertNotNull(text.runs.firstOrNull { it.text == "Chris.E" })
-        // Encart « Client final » dans la case au-dessus de « Commentaires »
-        val titre = text.runs.first { it.page == 0 && it.text == "Client final" }
+        // Encart du client final dans la case au-dessus de « Commentaires », sans la mention « Client final »
+        assertTrue(text.runs.none { it.text.contains("Client final") })
         val nom = text.runs.first { it.page == 0 && it.text == "ESAT TEST" }
         val adresse = text.runs.first { it.page == 0 && it.text == "3 allée des Essais" }
         assertEquals(427.1f, nom.x0, 1f)
-        assertTrue(titre.baseline < nom.baseline && nom.baseline < adresse.baseline && adresse.baseline < 426f)
+        assertTrue(nom.baseline < adresse.baseline && adresse.baseline < 426f)
     }
 
     @Test

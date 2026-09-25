@@ -90,11 +90,12 @@ class LayoutTest {
         assertEquals(422f, op.frame.left, 0.01f)
         assertEquals(560f, op.frame.right, 0.01f)
         assertEquals(426f, op.frame.bottom, 0.01f)
-        assertEquals(listOf("Client final", "Esat Test", "3 allée des Essais"), op.texts.map { it.lines.single().text })
+        // Pas de mention « Client final » sur la feuille : le nom et l'adresse seulement
+        assertEquals(listOf("Esat Test", "3 allée des Essais"), op.texts.map { it.lines.single().text })
         assertTrue(op.texts.all { it.bounds.top >= op.frame.top && it.bounds.bottom <= op.frame.bottom })
         // Nom trop long : réduit et sur deux lignes au plus, sans sortir du cadre
         val long = PanelLayout.build(p, mapOf("nom" to "Etablissement de Houdemont et du Parc"), null, m)!!
-        val nom = long.texts[1]
+        val nom = long.texts[0]
         assertTrue(nom.size < 16f && nom.lines.size <= 2)
         assertTrue(nom.lines.all { it.x + it.width <= long.frame.right + 0.01f })
         // Agrandi et déplacé d'un bloc depuis l'éditeur

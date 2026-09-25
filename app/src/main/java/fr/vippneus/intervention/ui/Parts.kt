@@ -245,7 +245,7 @@ fun SignaturePreview(sig: SignatureData?, onClick: () -> Unit, modifier: Modifie
     ) {
         if (sig == null) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Filled.Draw, contentDescription = null, tint = Palette.AmberDeep, modifier = Modifier.size(32.dp))
+                Icon(Icons.Filled.Draw, contentDescription = null, tint = c.accent, modifier = Modifier.size(32.dp))
                 Spacer(Modifier.height(8.dp))
                 Text("Touchez pour faire signer le client", style = MaterialTheme.typography.titleSmall, color = Palette.Graphite800)
             }

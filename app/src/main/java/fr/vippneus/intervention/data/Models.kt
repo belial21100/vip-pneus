@@ -101,6 +101,7 @@ data class PanelLine(
 /**
  * Encart encadré écrit sur la page (ex. client final au-dessus de « Commentaires »).
  * Sa hauteur suit le contenu ; il est posé sur [bottom], entre [left] et [right].
+ * [title] nomme l'encart dans l'application ; il n'est écrit sur la page que si [printTitle].
  */
 @Serializable
 data class PlacedPanel(
@@ -110,6 +111,7 @@ data class PlacedPanel(
     val right: Float,
     val bottom: Float,
     val lines: List<PanelLine>,
+    val printTitle: Boolean = false,
 )
 
 /** Modèle de remplissage d'un document client reconnu (ex. feuille de tâche Interfit). */

@@ -79,6 +79,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -298,8 +299,8 @@ private fun SidePanel(
                 .navigationBarsPadding()
                 .padding(horizontal = 28.dp, vertical = 24.dp),
         ) {
-            Brand()
-            Spacer(Modifier.height(if (tight) 16.dp else 36.dp))
+            Brand(logoHeight = if (tight) 72.dp else 96.dp)
+            Spacer(Modifier.height(if (tight) 14.dp else 26.dp))
             Text(greeting(settings.technicien), style = MaterialTheme.typography.headlineSmall, color = c.onChrome)
             if (!tight) Text(todayLong(), style = MaterialTheme.typography.bodyLarge, color = c.onChromeMuted)
             Spacer(Modifier.height(if (tight) 16.dp else 28.dp))
@@ -336,7 +337,7 @@ private fun TopHeader(
             .padding(start = 28.dp, end = 16.dp, top = 16.dp, bottom = 24.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Brand(Modifier.weight(1f))
+            Brand(logoHeight = 72.dp, modifier = Modifier.weight(1f))
             IconButton(onClick = onSettings, modifier = Modifier.size(52.dp)) {
                 Icon(Icons.Filled.Settings, contentDescription = "Réglages", tint = c.onChrome)
             }
@@ -359,14 +360,26 @@ private fun TopHeader(
     }
 }
 
+/** Logo VIP et nom de l'application. */
 @Composable
-private fun Brand(modifier: Modifier = Modifier) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        BrandMark(52.dp)
-        Spacer(Modifier.width(14.dp))
-        Column {
-            Wordmark(fontSize = 28.sp)
-            Text("Bons d'intervention", style = MaterialTheme.typography.bodyMedium, color = Vip.colors.onChromeMuted)
+private fun Brand(logoHeight: Dp, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        BrandLogo(logoHeight)
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .width(18.dp)
+                    .height(3.dp)
+                    .background(Vip.colors.accent),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "PNEUS · BONS D'INTERVENTION",
+                style = MaterialTheme.typography.labelMedium,
+                color = Vip.colors.onChromeMuted,
+                letterSpacing = 1.4.sp,
+            )
         }
     }
 }
@@ -385,10 +398,10 @@ private fun Overline(text: String) {
 @Composable
 private fun ImportCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
     val c = Vip.colors
-    val ink = Palette.Graphite900
+    val ink = c.onAccent
     Surface(onClick = onClick, color = c.accent, contentColor = ink, shape = MaterialTheme.shapes.large, modifier = modifier) {
         Row(Modifier.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconBadge(Icons.Filled.UploadFile, background = ink.copy(alpha = 0.1f), tint = ink, size = 52.dp)
+            IconBadge(Icons.Filled.UploadFile, background = ink.copy(alpha = 0.16f), tint = ink, size = 52.dp)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text("Importer un PDF client", style = MaterialTheme.typography.titleMedium)
@@ -469,7 +482,7 @@ private fun TechnicianRow(settings: Settings, onSettings: () -> Unit) {
                     .background(c.accent, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(initials.take(3), style = MaterialTheme.typography.titleSmall, color = Palette.Graphite900)
+                Text(initials.take(3), style = MaterialTheme.typography.titleSmall, color = c.onAccent)
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
@@ -626,7 +639,7 @@ private fun FilterPill(label: String, count: Int, selected: Boolean, onClick: ()
                 Text(
                     "$count",
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (selected) Palette.Graphite900 else c.muted,
+                    color = if (selected) c.onAccent else c.muted,
                 )
             }
         }
@@ -702,7 +715,7 @@ private fun InterventionCard(
             ) {
                 Row(verticalAlignment = Alignment.Top) {
                     val (icon, bg, tint) = when {
-                        selected -> Triple(Icons.Filled.CheckCircle, c.accent, Palette.Graphite900)
+                        selected -> Triple(Icons.Filled.CheckCircle, c.accent, c.onAccent)
                         i.type == InterventionType.FPS -> Triple(Icons.AutoMirrored.Filled.Assignment, c.chromeHigh, c.accent)
                         i.template != null -> Triple(Icons.Filled.Draw, c.chromeHigh, c.accent)
                         else -> Triple(Icons.Filled.PictureAsPdf, c.chromeHigh, c.accent)

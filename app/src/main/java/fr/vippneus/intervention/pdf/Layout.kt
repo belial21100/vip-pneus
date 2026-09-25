@@ -265,7 +265,7 @@ object TemplateLayout {
 }
 
 /**
- * Mise en page d'un encart : titre discret puis les valeurs saisies (réduites si besoin),
+ * Mise en page d'un encart : les valeurs saisies (réduites si besoin), précédées d'un titre discret s'il est demandé,
  * cadre ajusté au contenu et posé sur son bord bas ; l'échelle d'ajustement agrandit le tout.
  */
 object PanelLayout {
@@ -282,10 +282,13 @@ object PanelLayout {
 
         // Positions depuis le haut du cadre (lignes, corps, 1re ligne de base)
         val blocks = mutableListOf<Triple<List<String>, Float, Float>>()
-        val titleSize = TITLE_SIZE * s
-        var y = pad + titleSize * Typo.ASCENT
-        blocks += Triple(listOf(p.title), titleSize, y)
-        y += titleSize * Typo.DESCENT + 2f * s
+        var y = pad
+        if (p.printTitle) {
+            val titleSize = TITLE_SIZE * s
+            y += titleSize * Typo.ASCENT
+            blocks += Triple(listOf(p.title), titleSize, y)
+            y += titleSize * Typo.DESCENT + 2f * s
+        }
         for ((l, text) in filled) {
             var size = l.fontSize * s
             val minSize = l.minFontSize * s

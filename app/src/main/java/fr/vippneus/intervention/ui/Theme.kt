@@ -21,33 +21,33 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fr.vippneus.intervention.R
 
-/** Palette VIP Pneus : graphite (atelier, pneu) et jaune ambré (repères, actions). */
+/** Palette VIP Pneus, tirée du logo : noir, rouge, gris et blanc (gris neutres). */
 object Palette {
-    val Graphite950 = Color(0xFF0E1114)
-    val Graphite900 = Color(0xFF15181D)
-    val Graphite850 = Color(0xFF1B1F24)
-    val Graphite800 = Color(0xFF232830)
-    val Graphite700 = Color(0xFF2F353E)
-    val Graphite600 = Color(0xFF434A54)
-    val Graphite500 = Color(0xFF5B636E)
-    val Graphite400 = Color(0xFF7F8792)
-    val Graphite300 = Color(0xFFABB2BB)
-    val Graphite200 = Color(0xFFD3D8DE)
-    val Graphite100 = Color(0xFFE7EAEE)
-    val Graphite50 = Color(0xFFF3F4F6)
+    val Graphite950 = Color(0xFF0B0B0C)
+    val Graphite900 = Color(0xFF121213)
+    val Graphite850 = Color(0xFF1A1A1C)
+    val Graphite800 = Color(0xFF232325)
+    val Graphite700 = Color(0xFF2F2F32)
+    val Graphite600 = Color(0xFF45454A)
+    val Graphite500 = Color(0xFF5F5F65)
+    val Graphite400 = Color(0xFF86868C)
+    val Graphite300 = Color(0xFFAEAEB3)
+    val Graphite200 = Color(0xFFD5D5D9)
+    val Graphite100 = Color(0xFFE9E9EC)
+    val Graphite50 = Color(0xFFF4F4F5)
 
-    val Amber = Color(0xFFFFB400)
-    val AmberDeep = Color(0xFFE09A00)
-    val Amber100 = Color(0xFFFFEFC7)
-    val Amber50 = Color(0xFFFFF8E5)
-    val AmberInk = Color(0xFF5C3F00)
+    /** Rouge du logo (actions principales, repères). */
+    val Red = Color(0xFFE30613)
+    val RedBright = Color(0xFFFF2D2D)
+    val RedDeep = Color(0xFFB0000E)
+    val Red100 = Color(0xFFFDE4E5)
+    val Red50 = Color(0xFFFFF4F4)
+    val RedInk = Color(0xFF86080F)
 
     val Green = Color(0xFF178A4A)
     val Green100 = Color(0xFFDCF2E4)
     val Blue = Color(0xFF2360D8)
     val Blue100 = Color(0xFFDDE7FB)
-    val Red = Color(0xFFD4372C)
-    val Red100 = Color(0xFFFBE2DF)
     val Orange = Color(0xFFD9680A)
     val Orange100 = Color(0xFFFCE9D6)
 }
@@ -79,10 +79,10 @@ data class VipColors(
 )
 
 private val LightVip = VipColors(
-    accent = Palette.Amber,
-    onAccent = Palette.Graphite900,
-    accentSoft = Palette.Amber100,
-    onAccentSoft = Palette.AmberInk,
+    accent = Palette.Red,
+    onAccent = Color.White,
+    accentSoft = Palette.Red100,
+    onAccentSoft = Palette.RedInk,
     chrome = Palette.Graphite900,
     chromeHigh = Palette.Graphite800,
     onChrome = Color.White,
@@ -91,34 +91,35 @@ private val LightVip = VipColors(
     card = Color.White,
     cardBorder = Palette.Graphite100,
     muted = Palette.Graphite500,
-    autoFill = Palette.Amber50,
+    autoFill = Color(0xFFF0F0F2),
     success = Palette.Green,
     successSoft = Palette.Green100,
     info = Palette.Blue,
     infoSoft = Palette.Blue100,
     warning = Palette.Orange,
     warningSoft = Palette.Orange100,
-    danger = Palette.Red,
+    danger = Palette.RedDeep,
     dangerSoft = Palette.Red100,
 )
 
 private val DarkVip = LightVip.copy(
-    onAccentSoft = Palette.Amber100,
-    accentSoft = Color(0xFF3D3010),
+    accent = Color(0xFFF0232E),
+    accentSoft = Color(0xFF3A1215),
+    onAccentSoft = Color(0xFFFFB3B0),
     chrome = Palette.Graphite950,
     chromeHigh = Palette.Graphite900,
     canvas = Palette.Graphite950,
     card = Palette.Graphite850,
     cardBorder = Palette.Graphite800,
     muted = Palette.Graphite300,
-    autoFill = Color(0xFF2A2412),
+    autoFill = Palette.Graphite800,
     success = Color(0xFF53C285),
     successSoft = Color(0xFF15311F),
     info = Color(0xFF7FA6F5),
     infoSoft = Color(0xFF17243F),
     warning = Color(0xFFF2A15B),
     warningSoft = Color(0xFF3A2410),
-    danger = Color(0xFFF08A82),
+    danger = Color(0xFFFF8A80),
     dangerSoft = Color(0xFF3B1714),
 )
 
@@ -134,10 +135,10 @@ private val LightScheme = lightColorScheme(
     onPrimary = Color.White,
     primaryContainer = Palette.Graphite100,
     onPrimaryContainer = Palette.Graphite900,
-    secondary = Palette.Amber,
-    onSecondary = Palette.Graphite900,
-    secondaryContainer = Palette.Amber100,
-    onSecondaryContainer = Palette.AmberInk,
+    secondary = Palette.Red,
+    onSecondary = Color.White,
+    secondaryContainer = Palette.Red100,
+    onSecondaryContainer = Palette.RedInk,
     tertiary = Palette.Green,
     onTertiary = Color.White,
     tertiaryContainer = Palette.Green100,
@@ -149,16 +150,16 @@ private val LightScheme = lightColorScheme(
     surfaceVariant = Palette.Graphite100,
     onSurfaceVariant = Palette.Graphite500,
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF8F9FA),
-    surfaceContainer = Color(0xFFEEF0F3),
+    surfaceContainerLow = Color(0xFFF8F8F9),
+    surfaceContainer = Color(0xFFEFEFF1),
     surfaceContainerHigh = Palette.Graphite100,
     surfaceContainerHighest = Palette.Graphite200,
     outline = Palette.Graphite300,
     outlineVariant = Palette.Graphite200,
-    error = Palette.Red,
+    error = Palette.RedDeep,
     onError = Color.White,
     errorContainer = Palette.Red100,
-    onErrorContainer = Color(0xFF5C0F0A),
+    onErrorContainer = Palette.RedInk,
     inverseSurface = Palette.Graphite800,
     inverseOnSurface = Color.White,
 )
@@ -168,10 +169,10 @@ private val DarkScheme = darkColorScheme(
     onPrimary = Palette.Graphite900,
     primaryContainer = Palette.Graphite700,
     onPrimaryContainer = Color.White,
-    secondary = Palette.Amber,
-    onSecondary = Palette.Graphite900,
-    secondaryContainer = Color(0xFF3D3010),
-    onSecondaryContainer = Palette.Amber100,
+    secondary = Color(0xFFF0232E),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFF3A1215),
+    onSecondaryContainer = Color(0xFFFFB3B0),
     tertiary = Color(0xFF53C285),
     background = Palette.Graphite900,
     onBackground = Palette.Graphite50,
