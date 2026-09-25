@@ -300,22 +300,21 @@ fun VipButton(
 
 @Composable
 fun statusColor(status: DisplayStatus): Color = when (status) {
-    DisplayStatus.BROUILLON -> MaterialTheme.colorScheme.outline
-    DisplayStatus.PRET -> Vip.colors.info
-    DisplayStatus.ENVOYE -> Vip.colors.success
+    DisplayStatus.EN_COURS -> Vip.colors.accent
     DisplayStatus.INCOMPLET, DisplayStatus.MODIFIE -> Vip.colors.warning
+    DisplayStatus.PRET, DisplayStatus.A_RENVOYER -> Vip.colors.info
+    DisplayStatus.ENVOYE -> Vip.colors.success
 }
 
-/** Pastille de statut d'un bon (brouillon, PDF prêt, envoyé, envoyé incomplet, modifié après envoi). */
+/** Pastille de statut d'un bon : en cours (jaune), à envoyer (bleu), envoyé (vert), à corriger (orange). */
 @Composable
 fun StatusChip(status: DisplayStatus, modifier: Modifier = Modifier, onDark: Boolean = false) {
     val c = Vip.colors
     val fg = statusColor(status)
     val (bg, text, dot) = when {
-        onDark && status == DisplayStatus.BROUILLON -> Triple(Color.White.copy(alpha = 0.12f), Color.White.copy(alpha = 0.85f), Color.White.copy(alpha = 0.6f))
         onDark -> Triple(fg.copy(alpha = 0.28f), Color.White, lerp(fg, Color.White, 0.35f))
-        status == DisplayStatus.BROUILLON -> Triple(MaterialTheme.colorScheme.surfaceContainerHigh, MaterialTheme.colorScheme.onSurfaceVariant, fg)
-        status == DisplayStatus.PRET -> Triple(c.infoSoft, c.info, fg)
+        status == DisplayStatus.EN_COURS -> Triple(c.accentSoft, c.onAccentSoft, Palette.AmberDeep)
+        status == DisplayStatus.PRET || status == DisplayStatus.A_RENVOYER -> Triple(c.infoSoft, c.info, fg)
         status == DisplayStatus.ENVOYE -> Triple(c.successSoft, c.success, fg)
         else -> Triple(c.warningSoft, c.warning, fg)
     }

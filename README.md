@@ -65,11 +65,18 @@ Des photos (bon papier, pneus…) et d'autres PDF peuvent être ajoutés à la s
 
 ### Liste des bons
 
+- Trois sections, chacune avec sa couleur, pour voir d'un coup d'œil où en est chaque bon :
+  - **En cours** (jaune) : saisie commencée, il manque encore quelque chose (le dernier bon
+    touché en tête ; un bon envoyé incomplet y reste, en orange, tant qu'il n'est pas complété) ;
+  - **À envoyer** (bleu) : complets, pas encore partis à la compta (ou modifiés depuis
+    l'envoi : « À renvoyer ») ; bouton **Envoyer** sur chaque carte et **Tout envoyer** pour
+    les faire partir ensemble en un seul e-mail ;
+  - **Envoyés** (vert) : partis à la compta, cartes plus discrètes avec une coche, repérés par
+    jour d'intervention (Aujourd'hui, Hier, Cette semaine…).
+- Les filtres (Tous, En cours, À envoyer, Envoyés) et les compteurs du panneau affichent une
+  seule section.
 - Chaque bon montre la **miniature de sa page 1** telle qu'elle partira, son statut et ce qui
-  manque ; les bons sont **regroupés par jour d'intervention** (Aujourd'hui, Hier, Cette
-  semaine…).
-- **Tout envoyer** : les bons complets pas encore envoyés sont signalés en tête de liste et
-  partent ensemble en un appui (un seul e-mail).
+  manque.
 - **Supprimer** est immédiat mais annulable : « Bon supprimé — Annuler » pendant quelques
   secondes, avant l'effacement définitif.
 - **Récapitulatif** : pour ce mois-ci ou le précédent, un tableau (CSV pour Excel : date,

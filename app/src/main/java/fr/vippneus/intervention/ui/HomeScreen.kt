@@ -10,6 +10,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -39,6 +41,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
@@ -89,9 +92,11 @@ import fr.vippneus.intervention.data.DisplayStatus
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Naming
+import fr.vippneus.intervention.data.Phase
 import fr.vippneus.intervention.data.Recap
 import fr.vippneus.intervention.data.Settings
 import fr.vippneus.intervention.data.displayStatus
+import fr.vippneus.intervention.data.phase
 import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
@@ -105,13 +110,21 @@ import java.time.temporal.WeekFields
 import java.util.Date
 import java.util.Locale
 
-private enum class Filter(val label: String) { TOUS("Tous"), A_ENVOYER("À envoyer"), ENVOYES("Envoyés") }
+/** Filtres de la liste : tous les bons, ou un seul des trois temps. */
+private enum class Filter(val label: String, val phase: Phase?) {
+    TOUS("Tous", null),
+    EN_COURS("En cours", Phase.EN_COURS),
+    A_ENVOYER("À envoyer", Phase.A_ENVOYER),
+    ENVOYES("Envoyés", Phase.ENVOYE),
+}
 
 /** Chiffres du tableau de bord. */
 private class Counts(all: List<Intervention>) {
     val total = all.size
-    val toSend = all.count { it.displayStatus() != DisplayStatus.ENVOYE }
-    val sent = total - toSend
+    private val byPhase = all.groupingBy { it.phase() }.eachCount()
+    val enCours = byPhase[Phase.EN_COURS] ?: 0
+    val toSend = byPhase[Phase.A_ENVOYER] ?: 0
+    val sent = byPhase[Phase.ENVOYE] ?: 0
     val sentThisMonth: Int = run {
         val now = LocalDate.now()
         all.count { i ->
@@ -123,6 +136,7 @@ private class Counts(all: List<Intervention>) {
 
     fun of(f: Filter) = when (f) {
         Filter.TOUS -> total
+        Filter.EN_COURS -> enCours
         Filter.A_ENVOYER -> toSend
         Filter.ENVOYES -> sent
     }
@@ -159,13 +173,8 @@ fun HomeScreen(vm: AppViewModel) {
     val onFilter = { f: Filter -> filter = if (filter == f && f != Filter.TOUS) Filter.TOUS else f }
 
     val counts = remember(all) { Counts(all) }
-    // Complets et pas encore envoyés (ou modifiés depuis l'envoi) : prêts à partir
-    val ready = remember(all) {
-        all.filter {
-            val st = it.displayStatus()
-            st != DisplayStatus.ENVOYE && st != DisplayStatus.INCOMPLET && Completion.missing(it).isEmpty()
-        }.sortedByDescending { it.updatedAt }
-    }
+    // Complets et pas encore envoyés (ou complétés depuis l'envoi) : prêts à partir
+    val ready = remember(all) { all.filter { it.phase() == Phase.A_ENVOYER }.sortedByDescending { it.updatedAt } }
     val recapMonths = remember(all) {
         val now = YearMonth.now()
         listOf(now, now.minusMonths(1)).map { m -> m to Recap.bonsOf(all, m).size }
@@ -174,13 +183,7 @@ fun HomeScreen(vm: AppViewModel) {
         val q = query.trim().lowercase(Locale.FRANCE)
         // Du jour d'intervention le plus récent au plus ancien, puis dernier modifié en tête
         all.sortedWith(compareByDescending<Intervention> { Naming.interventionDate(it) }.thenByDescending { it.updatedAt })
-            .filter {
-                when (filter) {
-                    Filter.TOUS -> true
-                    Filter.A_ENVOYER -> it.displayStatus() != DisplayStatus.ENVOYE
-                    Filter.ENVOYES -> it.displayStatus() == DisplayStatus.ENVOYE
-                }
-            }
+            .filter { filter.phase == null || it.phase() == filter.phase }
             .filter { i ->
                 q.isEmpty() || Naming.title(i).lowercase(Locale.FRANCE).contains(q) ||
                     i.values.values.any { it.lowercase(Locale.FRANCE).contains(q) } ||
@@ -477,9 +480,13 @@ private fun NewFicheCard(onClick: () -> Unit, modifier: Modifier = Modifier, com
 @Composable
 private fun Kpis(counts: Counts, filter: Filter, onFilter: (Filter) -> Unit, compact: Boolean = false) {
     val c = Vip.colors
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         KpiTile(
-            counts.toSend, "À envoyer", c.accent, filter == Filter.A_ENVOYER, compact,
+            counts.enCours, "En cours", c.accent, filter == Filter.EN_COURS, compact,
+            { onFilter(Filter.EN_COURS) }, Modifier.weight(1f),
+        )
+        KpiTile(
+            counts.toSend, "À envoyer", Color(0xFF6EA0FF), filter == Filter.A_ENVOYER, compact,
             { onFilter(Filter.A_ENVOYER) }, Modifier.weight(1f),
         )
         KpiTile(
@@ -508,7 +515,8 @@ private fun KpiTile(
         border = if (selected) BorderStroke(2.dp, accent) else BorderStroke(1.dp, Color.White.copy(alpha = 0.06f)),
         modifier = modifier,
     ) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 14.dp)) {
+        // Chiffre en tête, libellé dessous (sur deux lignes au besoin) : tuiles de même hauteur
+        Column(Modifier.padding(horizontal = 12.dp, vertical = if (compact) 8.dp else 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
@@ -516,13 +524,13 @@ private fun KpiTile(
                         .background(accent, CircleShape),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(label, style = MaterialTheme.typography.labelMedium, color = c.onChromeMuted, maxLines = 2)
+                Text(
+                    "$value",
+                    style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displaySmall,
+                    fontFamily = BarlowCondensed,
+                )
             }
-            Text(
-                "$value",
-                style = if (compact) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.displaySmall,
-                fontFamily = BarlowCondensed,
-            )
+            Text(label, style = MaterialTheme.typography.labelMedium, color = c.onChromeMuted, maxLines = 2, minLines = 2)
         }
     }
 }
@@ -588,10 +596,18 @@ private fun BonsList(
     onRecap: (YearMonth) -> Unit,
 ) {
     val c = Vip.colors
-    // Bons regroupés par jour d'intervention (Aujourd'hui, Hier, Cette semaine…)
-    val groups = remember(shown) {
-        val today = LocalDate.now()
-        shown.groupBy { dayGroup(Naming.interventionDate(it), today) }
+    // Trois sections : en cours (dernier modifié en tête), à envoyer, envoyés (par jour d'intervention)
+    val sections = remember(shown) {
+        val byPhase = shown.groupBy { it.phase() }
+        Phase.entries.mapNotNull { p ->
+            val bons = byPhase[p] ?: return@mapNotNull null
+            p to when (p) {
+                Phase.ENVOYE -> bons.sortedWith(
+                    compareByDescending<Intervention> { Naming.interventionDate(it) }.thenByDescending { it.sentAt ?: 0L },
+                )
+                else -> bons.sortedByDescending { it.updatedAt }
+            }
+        }
     }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 340.dp),
@@ -605,11 +621,13 @@ private fun BonsList(
                 Column(Modifier.weight(1f)) {
                     Text("Mes bons", style = MaterialTheme.typography.headlineMedium)
                     Text(
-                        when (counts.total) {
-                            0 -> "Aucun bon enregistré"
-                            1 -> "1 bon · ${counts.toSend} à envoyer"
-                            else -> "${counts.total} bons · ${counts.toSend} à envoyer"
-                        },
+                        if (counts.total == 0) "Aucun bon enregistré"
+                        else listOf(
+                            if (counts.total == 1) "1 bon" else "${counts.total} bons",
+                            "${counts.enCours} en cours",
+                            "${counts.toSend} à envoyer",
+                            if (counts.sent == 1) "1 envoyé" else "${counts.sent} envoyés",
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
                         color = c.muted,
                     )
@@ -625,11 +643,7 @@ private fun BonsList(
                 Filter.entries.forEach { f -> FilterPill(f.label, counts.of(f), filter == f) { onFilter(f) } }
             }
         }
-        if (ready.isNotEmpty() && selection.isEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }, key = "prets") {
-                ReadyBanner(ready, onSendAll, Modifier.animateItem())
-            }
-        }
+
         if (settings.emailCompta.isBlank() || settings.technicien.isBlank()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 InfoBanner(
@@ -651,33 +665,120 @@ private fun BonsList(
                 ) { StepsGuide(Modifier.padding(top = 16.dp)) }
             }
         } else if (loaded && shown.isEmpty()) {
+            // Liste filtrée vide : un message adapté à ce qui est recherché
+            val (title, text) = when {
+                query.isNotBlank() -> "Aucun bon ne correspond" to "Modifiez la recherche ou le filtre."
+                filter == Filter.EN_COURS -> "Aucun bon en cours" to "Tous les bons sont complets."
+                filter == Filter.A_ENVOYER -> "Rien à envoyer" to "Aucun bon complet n'attend d'être envoyé."
+                filter == Filter.ENVOYES -> "Aucun bon envoyé" to "Les bons envoyés à la compta apparaîtront ici."
+                else -> "Aucun bon ne correspond" to "Modifiez la recherche ou le filtre."
+            }
             item(span = { GridItemSpan(maxLineSpan) }) {
-                EmptyState(Icons.Filled.SearchOff, "Aucun bon ne correspond", "Modifiez la recherche ou le filtre.") {
+                EmptyState(if (query.isNotBlank()) Icons.Filled.SearchOff else Icons.Filled.DoneAll, title, text) {
                     VipButton("Tout afficher", { onQuery(""); onFilter(Filter.TOUS) }, tone = Tone.GHOST, compact = true)
                 }
             }
         }
-        groups.forEach { (label, bons) ->
-            item(span = { GridItemSpan(maxLineSpan) }, key = "jour:$label", contentType = "jour") {
-                SubHeader(label, Modifier.animateItem()) {
-                    Text(if (bons.size == 1) "1 bon" else "${bons.size} bons", style = MaterialTheme.typography.labelMedium, color = c.muted)
-                }
-            }
-            items(bons, key = { it.id }, contentType = { "bon" }) { i ->
-                InterventionCard(
-                    i = i,
-                    source = source(i),
-                    selected = i.id in selection,
-                    selectionMode = selection.isNotEmpty(),
-                    onClick = { onOpen(i) },
-                    onLongClick = { onToggle(i) },
-                    onSend = { onSend(i) },
-                    onPreview = { onPreview(i) },
-                    onDuplicate = { onDuplicate(i) },
-                    onDelete = { onDelete(i) },
-                    modifier = Modifier.animateItem(),
+        sections.forEach { (phase, bons) ->
+            item(span = { GridItemSpan(maxLineSpan) }, key = "section:$phase", contentType = "section") {
+                PhaseHeader(
+                    phase, bons.size, Modifier.animateItem(),
+                    // « Tout envoyer » : les bons complets partent ensemble
+                    action = if (phase == Phase.A_ENVOYER && selection.isEmpty() && ready.isNotEmpty()) {
+                        {
+                            VipButton(
+                                if (ready.size == 1) "Envoyer" else "Tout envoyer",
+                                onSendAll,
+                                icon = Icons.AutoMirrored.Filled.Send,
+                                compact = true,
+                            )
+                        }
+                    } else null,
                 )
             }
+            // Envoyés : repères par jour d'intervention (Aujourd'hui, Hier, Cette semaine…)
+            val groups = if (phase == Phase.ENVOYE) {
+                val today = LocalDate.now()
+                bons.groupBy { dayGroup(Naming.interventionDate(it), today) }.toList()
+            } else {
+                listOf<Pair<String?, List<Intervention>>>(null to bons)
+            }
+            groups.forEach { (day, dayBons) ->
+                if (day != null) {
+                    item(span = { GridItemSpan(maxLineSpan) }, key = "jour:$day", contentType = "jour") {
+                        Text(
+                            day,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = c.muted,
+                            modifier = Modifier
+                                .animateItem()
+                                .padding(start = 4.dp),
+                        )
+                    }
+                }
+                items(dayBons, key = { it.id }, contentType = { "bon" }) { i ->
+                    InterventionCard(
+                        i = i,
+                        source = source(i),
+                        selected = i.id in selection,
+                        selectionMode = selection.isNotEmpty(),
+                        onClick = { onOpen(i) },
+                        onLongClick = { onToggle(i) },
+                        onSend = { onSend(i) },
+                        onPreview = { onPreview(i) },
+                        onDuplicate = { onDuplicate(i) },
+                        onDelete = { onDelete(i) },
+                        modifier = Modifier.animateItem(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** En-tête d'une section : pastille de couleur, nom, nombre, explication, action éventuelle. */
+@Composable
+private fun PhaseHeader(phase: Phase, count: Int, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
+    val c = Vip.colors
+    val (color, text) = when (phase) {
+        Phase.EN_COURS -> c.accent to "Saisie commencée : il manque encore quelque chose"
+        Phase.A_ENVOYER -> c.info to "Complets, pas encore partis à la compta"
+        Phase.ENVOYE -> c.success to "Partis à la compta"
+    }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .padding(top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(12.dp)
+                .background(color, CircleShape),
+        )
+        Spacer(Modifier.width(10.dp))
+        Text(phase.label, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "$count",
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape)
+                .padding(horizontal = 9.dp, vertical = 2.dp),
+        )
+        Spacer(Modifier.width(14.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = c.muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (action != null) {
+            Spacer(Modifier.width(12.dp))
+            action()
         }
     }
 }
@@ -694,24 +795,6 @@ private fun dayGroup(d: LocalDate, today: LocalDate): String {
         YearMonth.from(d) == YearMonth.from(today) -> "Plus tôt ce mois-ci"
         else -> Recap.monthLabel(YearMonth.from(d)).replaceFirstChar { it.titlecase(Locale.FRANCE) }
     }
-}
-
-/** Bons complets pas encore envoyés : un appui les envoie tous ensemble. */
-@Composable
-private fun ReadyBanner(ready: List<Intervention>, onSendAll: () -> Unit, modifier: Modifier = Modifier) {
-    val c = Vip.colors
-    val n = ready.size
-    InfoBanner(
-        icon = Icons.Filled.DoneAll,
-        title = if (n == 1) "1 bon complet, prêt à partir" else "$n bons complets, prêts à partir",
-        text = ready.take(3).joinToString("  ·  ") { Naming.title(it) } + if (n > 3) "  ·  …" else "",
-        background = c.successSoft,
-        content = c.success,
-        modifier = modifier,
-        action = {
-            VipButton(if (n == 1) "Envoyer" else "Tout envoyer", onSendAll, icon = Icons.AutoMirrored.Filled.Send, compact = true)
-        },
-    )
 }
 
 /** Récapitulatif d'un mois pour la compta (tableur), ce mois-ci ou le précédent. */
@@ -855,11 +938,17 @@ private fun InterventionCard(
     val c = Vip.colors
     val status = i.displayStatus()
     val todos = remember(i) { Completion.todos(i) }
-    val done = todos.count { it.done }
+    val filled = todos.count { it.done }
     val shape = MaterialTheme.shapes.large
+    val done = status == DisplayStatus.ENVOYE
     Surface(
         shape = shape,
-        color = if (selected) c.accentSoft else c.card,
+        // Envoyé : carte plus discrète, le travail est fini
+        color = when {
+            selected -> c.accentSoft
+            done -> c.card.copy(alpha = 0.55f)
+            else -> c.card
+        },
         border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) c.accent else c.cardBorder),
         modifier = modifier
             .fillMaxWidth()
@@ -880,6 +969,19 @@ private fun InterventionCard(
                     .width(66.dp),
             ) {
                 BonThumbnail(i, source, Modifier.fillMaxWidth())
+                if (done && !selected) {
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .offset(x = 6.dp, y = 6.dp)
+                            .size(24.dp)
+                            .background(c.success, CircleShape)
+                            .border(2.dp, c.card, CircleShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Filled.Check, contentDescription = "Envoyé", tint = Color.White, modifier = Modifier.size(15.dp))
+                    }
+                }
                 if (selected) {
                     Box(
                         Modifier
@@ -929,11 +1031,12 @@ private fun InterventionCard(
                 val note = when {
                     status == DisplayStatus.INCOMPLET -> "Envoyé sans : " + i.sentMissing.joinToString(", ") + " — à compléter puis renvoyer"
                     status != DisplayStatus.ENVOYE && missing.isNotEmpty() -> "À compléter : " + missing.joinToString(", ") { it.label }
-                    status == DisplayStatus.MODIFIE && i.sentMissing.isNotEmpty() -> "Complété depuis l'envoi incomplet : à renvoyer"
+                    status == DisplayStatus.A_RENVOYER && i.sentMissing.isNotEmpty() -> "Complété depuis l'envoi incomplet : à renvoyer"
+                    status == DisplayStatus.A_RENVOYER -> "Modifié depuis l'envoi : à renvoyer"
                     else -> null
                 }
                 if (note != null) {
-                    val tint = if (missing.isEmpty() && status == DisplayStatus.MODIFIE) c.info else c.warning
+                    val tint = if (status == DisplayStatus.A_RENVOYER) c.info else c.warning
                     Spacer(Modifier.height(8.dp))
                     Row(Modifier.padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.Warning, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
@@ -947,14 +1050,20 @@ private fun InterventionCard(
                     StatusChip(status)
                     Spacer(Modifier.weight(1f))
                     val sent = i.sentAt
-                    if ((status == DisplayStatus.ENVOYE || status == DisplayStatus.INCOMPLET) && sent != null) {
-                        Text(
+                    when {
+                        (status == DisplayStatus.ENVOYE || status == DisplayStatus.INCOMPLET) && sent != null -> Text(
                             "le " + SimpleDateFormat("dd/MM à HH:mm", Locale.FRANCE).format(Date(sent)),
                             style = MaterialTheme.typography.bodySmall,
                             color = c.muted,
                         )
-                    } else if (todos.isNotEmpty()) {
-                        CompletionMeter(done, todos.size)
+                        // Complet : il n'y a plus qu'à l'envoyer
+                        status.phase == Phase.A_ENVOYER && !selectionMode -> VipButton(
+                            if (status == DisplayStatus.A_RENVOYER) "Renvoyer" else "Envoyer",
+                            onSend,
+                            icon = Icons.AutoMirrored.Filled.Send,
+                            compact = true,
+                        )
+                        todos.isNotEmpty() -> CompletionMeter(filled, todos.size)
                     }
                 }
             }

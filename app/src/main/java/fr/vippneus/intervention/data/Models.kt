@@ -185,18 +185,43 @@ object DocKeys {
     const val DATE = "doc.date"
 }
 
-enum class DisplayStatus(val label: String) {
-    BROUILLON("Brouillon"),
-    PRET("PDF prêt"),
-    ENVOYE("Envoyé"),
-    /** Envoyé alors qu'il manquait quelque chose : à corriger puis renvoyer. */
-    INCOMPLET("Envoyé incomplet"),
-    MODIFIE("Modifié après envoi"),
+/** Les trois temps d'un bon : saisie en cours, prêt à partir, envoyé à la compta. */
+enum class Phase(val label: String) {
+    EN_COURS("En cours"),
+    A_ENVOYER("À envoyer"),
+    ENVOYE("Envoyés"),
 }
 
-fun Intervention.displayStatus(): DisplayStatus = when {
-    sentAt != null && updatedAt <= sentAt -> if (sentMissing.isEmpty()) DisplayStatus.ENVOYE else DisplayStatus.INCOMPLET
-    sentAt != null -> DisplayStatus.MODIFIE
-    generatedAt != null && updatedAt <= generatedAt -> DisplayStatus.PRET
-    else -> DisplayStatus.BROUILLON
+/** Où en est le bon, tel qu'affiché sur la liste et en tête du bon. */
+enum class DisplayStatus(val label: String, val phase: Phase) {
+    /** Saisie commencée, il manque encore quelque chose. */
+    EN_COURS("En cours", Phase.EN_COURS),
+    /** Envoyé alors qu'il manquait quelque chose : à compléter puis renvoyer. */
+    INCOMPLET("Envoyé incomplet", Phase.EN_COURS),
+    /** Envoyé complet, puis modifié : il manque maintenant quelque chose. */
+    MODIFIE("Modifié après envoi", Phase.EN_COURS),
+    /** Complet, jamais envoyé. */
+    PRET("Prêt à envoyer", Phase.A_ENVOYER),
+    /** Complet, modifié ou complété depuis le dernier envoi. */
+    A_RENVOYER("À renvoyer", Phase.A_ENVOYER),
+    ENVOYE("Envoyé", Phase.ENVOYE),
 }
+
+fun Intervention.displayStatus(): DisplayStatus {
+    val sent = sentAt
+    val complete = Completion.missing(this).isEmpty()
+    return when {
+        // Rien n'a changé depuis l'envoi
+        sent != null && updatedAt <= sent -> if (sentMissing.isEmpty()) DisplayStatus.ENVOYE else DisplayStatus.INCOMPLET
+        // Modifié depuis l'envoi
+        sent != null -> when {
+            complete -> DisplayStatus.A_RENVOYER
+            sentMissing.isNotEmpty() -> DisplayStatus.INCOMPLET
+            else -> DisplayStatus.MODIFIE
+        }
+        complete -> DisplayStatus.PRET
+        else -> DisplayStatus.EN_COURS
+    }
+}
+
+fun Intervention.phase(): Phase = displayStatus().phase

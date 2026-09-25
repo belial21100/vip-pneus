@@ -7,10 +7,12 @@ import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Overlay
 import fr.vippneus.intervention.data.OverlayKind
+import fr.vippneus.intervention.data.Phase
 import fr.vippneus.intervention.data.PlacedBox
 import fr.vippneus.intervention.data.PlacedField
 import fr.vippneus.intervention.data.SignatureData
 import fr.vippneus.intervention.data.displayStatus
+import fr.vippneus.intervention.data.phase
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -102,16 +104,41 @@ class CompletionTest {
     }
 
     @Test
+    fun enCours_aEnvoyer_envoye() {
+        val signe = listOf(Overlay("s", OverlayKind.SIGNATURE, 10f, 10f, width = 150f, height = 75f, signature = sig))
+        val i = Intervention("x", InterventionType.DOCUMENT, 0L, updatedAt = 100L)
+        // Saisie commencée, il manque la signature
+        assertEquals(DisplayStatus.EN_COURS, i.displayStatus())
+        assertEquals(Phase.EN_COURS, i.phase())
+        // Complet, jamais envoyé
+        assertEquals(DisplayStatus.PRET, i.copy(overlays = signe).displayStatus())
+        assertEquals(Phase.A_ENVOYER, i.copy(overlays = signe).phase())
+        // Envoyé complet
+        val envoye = i.copy(overlays = signe, sentAt = 200L)
+        assertEquals(DisplayStatus.ENVOYE, envoye.displayStatus())
+        assertEquals(Phase.ENVOYE, envoye.phase())
+        // Modifié depuis l'envoi : à renvoyer, ou de nouveau en cours s'il manque quelque chose
+        assertEquals(DisplayStatus.A_RENVOYER, envoye.copy(updatedAt = 300L).displayStatus())
+        assertEquals(DisplayStatus.MODIFIE, envoye.copy(updatedAt = 300L, overlays = emptyList()).displayStatus())
+    }
+
+    @Test
     fun envoiIncomplet_marqueJusquAuRenvoi() {
         val i = Intervention("x", InterventionType.DOCUMENT, 0L, updatedAt = 100L)
-        assertEquals(DisplayStatus.BROUILLON, i.displayStatus())
-        // Envoyé quand même sans la signature : à corriger
+        // Envoyé quand même sans la signature : à corriger, reste « en cours »
         val incomplet = i.copy(sentAt = 200L, sentMissing = listOf("Signature du client"))
         assertEquals(DisplayStatus.INCOMPLET, incomplet.displayStatus())
-        // Complété ensuite : à renvoyer
-        assertEquals(DisplayStatus.MODIFIE, incomplet.copy(updatedAt = 300L).displayStatus())
+        assertEquals(Phase.EN_COURS, incomplet.phase())
+        // Modifié mais toujours pas signé
+        assertEquals(DisplayStatus.INCOMPLET, incomplet.copy(updatedAt = 300L).displayStatus())
+        // Signé ensuite : à renvoyer
+        val signe = listOf(Overlay("s", OverlayKind.SIGNATURE, 10f, 10f, width = 150f, height = 75f, signature = sig))
+        assertEquals(DisplayStatus.A_RENVOYER, incomplet.copy(updatedAt = 300L, overlays = signe).displayStatus())
         // Renvoyé complet
-        assertEquals(DisplayStatus.ENVOYE, incomplet.copy(updatedAt = 300L, sentAt = 400L, sentMissing = emptyList()).displayStatus())
+        assertEquals(
+            DisplayStatus.ENVOYE,
+            incomplet.copy(updatedAt = 300L, overlays = signe, sentAt = 400L, sentMissing = emptyList()).displayStatus(),
+        )
     }
 
     @Test

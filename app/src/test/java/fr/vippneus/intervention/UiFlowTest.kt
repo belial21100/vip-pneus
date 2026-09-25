@@ -518,9 +518,10 @@ class UiFlowTest {
         compose.setContent { VipTheme { AppRoot(vm) } }
         idle(40)
         snap("13-accueil-plusieurs-bons")
-        // Regroupés par jour d'intervention
-        compose.onNodeWithText("AUJOURD'HUI").assertExists()
-        compose.onNodeWithText("HIER").assertExists()
+        // En cours d'un côté, envoyés de l'autre (repérés par jour)
+        compose.onNodeWithText("Saisie commencée : il manque encore quelque chose").assertExists()
+        compose.onNodeWithText("Partis à la compta").assertExists()
+        compose.onNodeWithText("Hier").assertExists()
         // Ce qui manque est écrit sur chaque carte
         compose.onAllNodesWithText("À compléter :", substring = true)[0].assertExists()
 
@@ -662,7 +663,7 @@ class UiFlowTest {
         val incomplet = vm.createFps()
         compose.setContent { VipTheme { AppRoot(vm) } }
         idle(40)
-        compose.onNodeWithText("2 bons complets, prêts à partir").assertExists()
+        compose.onNodeWithText("Complets, pas encore partis à la compta").assertExists()
         snap("22-tout-envoyer")
         compose.onNodeWithText("Tout envoyer").performClick()
         waitFor { vm.interventions.value.filter { it.id == a || it.id == b }.all { it.sentAt != null } }
@@ -671,7 +672,50 @@ class UiFlowTest {
         // Le bon incomplet n'est pas parti
         assertEquals(null, vm.interventions.value.first { it.id == incomplet }.sentAt)
         idle(10)
-        compose.onNodeWithText("prêts à partir", substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Tout envoyer").assertDoesNotExist()
+        compose.onNodeWithText("Partis à la compta").assertExists()
+    }
+
+    @Test
+    fun enCoursAEnvoyerEnvoyes_separes() {
+        val vm = newVm()
+        configure(vm)
+        val complet = mapOf(
+            K.NUMERO_COMMANDE to "1234567", K.MARQUE to "Hyster", K.HORAMETRE to "1293",
+            K.pneu("av", "quantite") to "2", K.prestation("depose", "8") to "2", K.SERRAGE_AV to "650",
+        )
+        fun fps(client: String, values: Map<String, String>, signed: Boolean = false, sent: Boolean = false) {
+            val id = vm.createFps()
+            vm.update(id) {
+                it.copy(
+                    values = it.values + values + (K.CLIENT_MANDATAIRE to client),
+                    signature = if (signed) signature() else null,
+                )
+            }
+            if (sent) vm.update(id, touch = false) { it.copy(sentAt = System.currentTimeMillis() + 1000) }
+        }
+        fps("Garage en cours", mapOf(K.MARQUE to "Linde"))
+        fps("Client prêt", complet, signed = true)
+        fps("Client envoyé", complet, signed = true, sent = true)
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        idle(40)
+        // Trois sections, chacune avec sa couleur
+        compose.onNodeWithText("Saisie commencée : il manque encore quelque chose").assertExists()
+        compose.onNodeWithText("Complets, pas encore partis à la compta").assertExists()
+        compose.onNodeWithText("Partis à la compta").assertExists()
+        snap("25-en-cours-a-envoyer-envoyes")
+        // Filtre « Envoyés » : seulement ceux qui sont partis
+        compose.onNode(hasText("Envoyés") and hasClickAction()).performClick()
+        idle(10)
+        compose.onNodeWithText("Client envoyé").assertExists()
+        compose.onNodeWithText("Garage en cours").assertDoesNotExist()
+        snap("25b-filtre-envoyes")
+        // Filtre « En cours » (compteur du panneau) : ceux dont la saisie est à terminer
+        compose.onAllNodes(hasText("En cours") and hasClickAction())[0].performClick()
+        idle(10)
+        compose.onNodeWithText("Garage en cours").assertExists()
+        compose.onNodeWithText("Client envoyé").assertDoesNotExist()
+        snap("25c-filtre-en-cours")
     }
 
     @Test

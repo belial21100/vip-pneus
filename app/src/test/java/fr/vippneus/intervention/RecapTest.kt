@@ -54,6 +54,6 @@ class RecapTest {
         assertTrue(row, row.endsWith(";"))
         // Pas encore envoyé : statut et ce qui manque
         assertTrue(lines[2], lines[2].startsWith("10/09/2026;Document à signer;Client Test;"))
-        assertTrue(lines[2], lines[2].endsWith(";Brouillon;;Signature du client"))
+        assertTrue(lines[2], lines[2].endsWith(";En cours;;Signature du client"))
     }
 }
