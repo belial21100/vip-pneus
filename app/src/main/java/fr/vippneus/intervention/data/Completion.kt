@@ -51,7 +51,7 @@ object Completion {
     private fun signed(i: Intervention) =
         i.signature?.isEmpty == false || i.overlays.any { it.kind == OverlayKind.SIGNATURE && it.signature?.isEmpty == false }
 
-    private val pneuKeys = listOf("av", "ar").flatMap { e -> FpsTemplate.pneuColumns.map { (c, _, _) -> K.pneu(e, c) } }
+    private val pneuKeys = FpsTemplate.pneuRows.flatMap { r -> FpsTemplate.pneuColumns.map { (c, _, _) -> K.pneu(r.key, c) } }
 
     private val prestationKeys = FpsTemplate.prestationRows.flatMap { (r, _, _) ->
         FpsTemplate.prestationColumns.map { (c, _, _) -> K.prestation(r, c) }
@@ -63,6 +63,7 @@ object Completion {
         Todo(K.MARQUE, "Matériel", filled(i, K.MARQUE, K.TYPE, K.SERIE), "Marque, type ou n° de série de l'engin"),
         Todo(K.HORAMETRE, "Horamètre", filled(i, K.HORAMETRE), "Heures relevées sur l'engin"),
         Todo(K.pneu("av", "dimensions"), "Pneus", pneuKeys.any { filled(i, it) }, "Au moins une information : dimensions, marque, quantité…"),
+    ) + essieux(i) + listOf(
         Todo(K.prestation("depose", "8"), "Prestations", prestationKeys.any { filled(i, it) }, "Au moins une quantité dans le tableau"),
         Todo(
             K.SERRAGE_AV, "Serrage des roues",
@@ -71,6 +72,11 @@ object Completion {
         ),
         Todo(SIGNATURE, "Signature du client", signed(i), "À faire signer en fin d'intervention"),
     )
+
+    /** Lignes de pneus ajoutées (autres essieux, roues intérieures) : l'essieu doit être précisé. */
+    private fun essieux(i: Intervention) = FpsTemplate.extraPneuRows.filter { Pneus.hasInfo(i, it.key) }.map {
+        Todo(K.essieu(it.key), "Essieu de la ${it.name}", filled(i, K.essieu(it.key)), "Essieu ou roues concernés, ex. Essieu 3, AR int.")
+    }
 
     /** Aide des cases de la feuille de tâche Mastra (suffixe de la clé). */
     private val HINTS = mapOf(

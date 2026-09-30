@@ -287,6 +287,53 @@ class UiFlowTest {
         snap("00f-bienvenue-portrait")
     }
 
+    /** Plusieurs essieux et roues intérieures : lignes ajoutées au tableau des pneus. */
+    @Test
+    fun ficheFps_lignesDePneusAjoutees() {
+        val vm = newVm()
+        configure(vm)
+        val id = vm.createFps()
+        vm.update(id) {
+            it.copy(
+                values = it.values + mapOf(
+                    K.pneu("av", "dimensions") to "385/65 R22.5", K.pneu("av", "quantite") to "2",
+                    K.pneu("ar", "dimensions") to "315/80 R22.5", K.pneu("ar", "quantite") to "2", K.AR_FOURNI to "oui",
+                    K.pneu("sup1", "dimensions") to "315/80 R22.5", K.pneu("sup1", "quantite") to "2",
+                ),
+            )
+        }
+        vm.navigate(Screen.Fps(id))
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        idle(4)
+        fun current() = vm.interventions.value.first { it.id == id }
+        // L'essieu de la ligne ajoutée est demandé
+        assertTrue(Completion.missing(current()).any { it.key == K.essieu("sup1") })
+        compose.onAllNodesWithText("Pneus")[0].performClick()
+        idle()
+        snap("02f-fiche-pneus-essieux")
+
+        // Essieux proposés dès la saisie
+        val essieu = compose.onNode(hasText("Essieu / roues") and hasSetTextAction())
+        essieu.performScrollTo().performClick()
+        idle()
+        compose.onNodeWithText("Essieu 3").assertExists()
+        essieu.performTextInput("AR int.")
+        idle()
+        assertEquals("AR int.", current().value(K.essieu("sup1")))
+        assertTrue(Completion.missing(current()).none { it.key == K.essieu("sup1") })
+
+        // Une ligne de plus, puis retirée
+        compose.onNodeWithText("Ajouter un essieu ou des roues intérieures").performScrollTo().performClick()
+        idle()
+        assertEquals(2, compose.onAllNodes(hasText("Essieu / roues") and hasSetTextAction()).fetchSemanticsNodes().size)
+        snap("02g-fiche-pneus-ligne-ajoutee")
+        compose.onAllNodesWithText("Retirer")[0].performScrollTo().performClick()
+        idle()
+        assertEquals(1, compose.onAllNodes(hasText("Essieu / roues") and hasSetTextAction()).fetchSemanticsNodes().size)
+        assertEquals("", current().value(K.essieu("sup1")))
+        assertEquals("", current().value(K.pneu("sup1", "dimensions")))
+    }
+
     @Test
     @Config(qualifiers = "w800dp-h1280dp-port-mdpi")
     fun ficheFps_portrait() {

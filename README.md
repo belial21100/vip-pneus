@@ -8,7 +8,7 @@ les bons restent enregistrés sur la tablette.
 
 Trois sortes de bons :
 
-- **Fiche d'intervention** (Mac2, Conti…) : la fiche presse mobile FPS, créée avec
+- **Fiche d'intervention** (Mac2, Conti…) : la fiche presse mobile, au logo VIP, créée avec
   **Nouvelle fiche d'intervention**. On y joint le bon de commande du client : ses
   informations **remplissent automatiquement** la fiche, et il la suit dans le PDF.
   PDF envoyé = la fiche, puis le bon de commande.
@@ -27,8 +27,8 @@ d'intervention, on le joint à une nouvelle fiche.
 
 | Document client | Ce que fait l'application |
 |---|---|
-| **Bon de commande Manuloc** (joint à une fiche) | Fiche pré-remplie : n° de commande, client mandataire (adresse de facturation), client utilisateur (adresse de livraison), n° de série et type d'engin, pneus AV/AR (dimensions, marque, profil, type, quantité) et quantités de prestations par taille de jante. |
-| **Mobile Service Continental** (Conti360°, joint à une fiche) | Fiche pré-remplie : n° Mobile Service, rendez-vous, site (localisation), modèle, immatriculation, n° de flotte, pneus montés et prestations. |
+| **Bon de commande Manuloc** (joint à une fiche) | Fiche pré-remplie : n° de commande, client mandataire (adresse de facturation), client utilisateur (adresse de livraison), n° de série et type d'engin, pneus AV/AR (dimensions, marque, profil, type, quantité ; une autre dimension sur un même essieu va sur une ligne ajoutée) et quantités de prestations par taille de jante. |
+| **Mobile Service Continental** (Conti360°, joint à une fiche) | Fiche pré-remplie : n° Mobile Service, rendez-vous, site (localisation), modèle, immatriculation, n° de flotte, pneus montés (essieu 1 : AV, essieu 2 : AR, suivants sur des lignes ajoutées) et prestations. |
 | **Feuille de tâche Mastra** (Interfit, importée) | Écriture directe sur le document, seulement dans les cases que remplit le technicien : lecture du compteur, couple de serrage, monteur, date, « Reçu par » et signature, aux emplacements et tailles qu'il utilise (couple préconisé et horamètre de la demande affichés en aide). Le client final (lieu réel de l'intervention s'il diffère de « Livrer à ») s'écrit dans un encart au-dessus de « Commentaires ». Toute autre mention : texte libre posé sur la page. Page 2 : le document d'origine. Si le PDF reçu a plusieurs pages (page 1 scannée ou déjà traitée), la feuille est cherchée dans les pages suivantes et seule sa page est gardée. |
 | Autre document importé (bon de livraison…) | Document à signer : **seule la signature du client est exigée**, aucun champ n'est imposé. Sans texte lisible (photo, scan), un message le signale. |
 
@@ -46,14 +46,19 @@ Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office
    portent la mention « À compléter » et chaque rubrique une pastille « À compléter » ou
    « Complet ». Ce qui manque est aussi rappelé dans la barre d'envoi, sur la liste des bons
    et au-dessus de l'aperçu du PDF. L'aperçu de la page se met à jour en direct.
-3. **Faire signer** le client au doigt ou au stylet (son nom se saisit dans la même fenêtre).
-4. Au besoin, écrire sur la page (ou **Ajuster** la fiche) : déplacer un texte, changer sa
+3. **Pneus montés** (tableau « Fournitures » de la fiche) : une ligne AV et une ligne AR, puis
+   **Ajouter un essieu ou des roues intérieures** pour les véhicules à plusieurs essieux ou
+   roues jumelées (jusqu'à 4 lignes de plus). L'essieu de chaque ligne ajoutée est à préciser
+   (« Essieu 3 », « AR int. »… proposés à la saisie) ; « Recopier la ligne du dessus » reprend
+   les pneus de la ligne précédente.
+4. **Faire signer** le client au doigt ou au stylet (son nom se saisit dans la même fenêtre).
+5. Au besoin, écrire sur la page (ou **Ajuster** la fiche) : déplacer un texte, changer sa
    taille, ajouter une mention, une date, une croix ou une signature (pincer pour zoomer).
    Le bouton **plein écran** de la palette donne toute la tablette à la page, et le bouton
    **largeur** l'agrandit à la largeur de l'écran. Sur une feuille Mastra, les cases vides
    sont repérées en jaune sur la page : un appui les remplit ; en plein écran, « Manque : … »
    en bas ouvre directement la case suivante.
-5. **Envoyer à la compta** (barre du bas, avec le nom du fichier) : s'il manque quelque
+6. **Envoyer à la compta** (barre du bas, avec le nom du fichier) : s'il manque quelque
    chose, l'application dit précisément quoi avant l'envoi (y compris depuis la liste des
    bons, et bon par bon pour un envoi groupé). L'envoi reste possible (« Envoyer quand
    même ») : le bon est alors marqué **Envoyé incomplet**, avec ce qui manquait, sur la
@@ -118,8 +123,9 @@ désinstaller l'application (et perdre les bons enregistrés) pour installer une
 
 - Kotlin, Jetpack Compose (Material 3), PdfBox-Android pour la lecture et l'écriture des PDF.
 - `app/src/main/java/fr/vippneus/intervention/`
-  - `pdf/FpsTemplate.kt` : zones de saisie de la fiche FPS (positions et tailles relevées
-    sur des fiches remplies par les techniciens) ;
+  - `pdf/FpsTemplate.kt` : zones de saisie de la fiche (positions et tailles relevées
+    sur des fiches remplies par les techniciens ; tableau « Fournitures » à 6 lignes) ;
+    `data/Pneus.kt` : lignes de pneus ajoutées (recopier, retirer) ;
   - `pdf/Layout.kt` : mise en page commune à l'aperçu écran et au PDF (ce que l'on voit
     est ce que l'on obtient) ; `pdf/PdfExporter.kt` : création du PDF final ;
   - `importer/` : lecture du texte positionné des PDF, reconnaissance des documents
@@ -128,7 +134,9 @@ désinstaller l'application (et perdre les bons enregistrés) pour installer une
     `data/Recap.kt` : récapitulatif mensuel pour la comptabilité ;
   - `ui/` : écrans (accueil, fiche, document client, éditeur de page, signature, réglages) ;
     `Theme.kt` (graphite et jaune, police Barlow) et `Components.kt` (éléments communs).
-- `app/src/main/assets/templates/fiche_presse_mobile.jpg` : fiche vierge (fond de page).
+- `app/src/main/assets/templates/fiche_presse_mobile.jpg` : fiche vierge (fond de page) : la fiche
+  FPS d'origine, avec le logo VIP et un tableau « Fournitures » à 6 lignes (essieu, fournis
+  oui / non, dimensions, marque, profil, type, quantité).
 
 ### Construire
 

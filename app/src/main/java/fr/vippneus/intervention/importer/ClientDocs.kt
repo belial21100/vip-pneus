@@ -6,6 +6,7 @@ import fr.vippneus.intervention.data.PanelLine
 import fr.vippneus.intervention.data.PlacedBox
 import fr.vippneus.intervention.data.PlacedPanel
 import fr.vippneus.intervention.data.PlacedField
+import fr.vippneus.intervention.pdf.FpsTemplate
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import java.util.Locale
 
@@ -37,7 +38,7 @@ sealed interface ImportPlan {
 /** Ligne de pneu extraite d'une commande. */
 data class TireLine(
     val qty: Int,
-    val axle: String?, // "av" / "ar" / null
+    val axle: String?, // "av" / "ar" / "Essieu 3"… / null
     val dimensions: String,
     val rim: String?,
     val brand: String,
@@ -137,6 +138,24 @@ object ClientDocs {
         else -> null
     }
 
+    /** Essieu d'une position de pneu (« 1LI » -> av, « 2RO » -> ar, « 3LO » -> Essieu 3). */
+    fun axleOfPosition(n: Int): String = when (n) {
+        1 -> "av"
+        2 -> "ar"
+        else -> "Essieu $n"
+    }
+
+    private fun axleOrder(axle: String) = when (axle) {
+        "av" -> 0
+        "ar" -> 1
+        else -> 2
+    }
+
+    private fun axleLabel(axle: String) = when (axle) {
+        "av", "ar" -> axle.uppercase(Locale.FRANCE)
+        else -> axle
+    }
+
     /** Colonne « pouces » du tableau des prestations d'après la taille de jante. */
     fun rimColumn(rim: String?): String {
         val r = rim?.trim()?.replace(',', '.') ?: return "autres"
@@ -147,17 +166,29 @@ object ClientDocs {
         }
     }
 
-    /** Remplit tableaux « Pneus AV / AR » et prestations (dépose, dépressage, déchets) à partir des pneus. */
+    /**
+     * Remplit le tableau « Fournitures » et les prestations (dépose, dépressage, déchets) à partir des pneus :
+     * une ligne par essieu et par dimension ; AV et AR sur leurs lignes, les autres (autre dimension,
+     * autre essieu) sur les lignes à préciser, avec leur essieu.
+     */
     fun tireValues(tires: List<TireLine>): Map<String, String> {
         val v = mutableMapOf<String, String>()
-        val byAxle = tires.groupBy { it.axle ?: "av" }
+        val free = FpsTemplate.extraPneuRows.map { it.key }.iterator()
+        val byAxle = tires.groupBy { it.axle ?: "av" }.entries.sortedWith(compareBy({ axleOrder(it.key) }, { it.key }))
         for ((axle, list) in byAxle) {
-            val first = list.first()
-            v[K.pneu(axle, "dimensions")] = first.dimensions
-            if (first.brand.isNotEmpty()) v[K.pneu(axle, "marque")] = first.brand
-            if (first.profile.isNotEmpty()) v[K.pneu(axle, "profil")] = first.profile
-            if (first.type.isNotEmpty()) v[K.pneu(axle, "type")] = first.type
-            v[K.pneu(axle, "quantite")] = list.filter { it.dimensions == first.dimensions }.sumOf { it.qty }.toString()
+            list.groupBy { it.dimensions }.values.forEachIndexed { n, same ->
+                val row = when {
+                    n == 0 && (axle == "av" || axle == "ar") -> axle
+                    free.hasNext() -> free.next().also { v[K.essieu(it)] = axleLabel(axle) }
+                    else -> return@forEachIndexed
+                }
+                val first = same.first()
+                v[K.pneu(row, "dimensions")] = first.dimensions
+                if (first.brand.isNotEmpty()) v[K.pneu(row, "marque")] = first.brand
+                if (first.profile.isNotEmpty()) v[K.pneu(row, "profil")] = first.profile
+                if (first.type.isNotEmpty()) v[K.pneu(row, "type")] = first.type
+                v[K.pneu(row, "quantite")] = same.sumOf { it.qty }.toString()
+            }
         }
         val perColumn = tires.groupBy { rimColumn(it.rim) }.mapValues { (_, l) -> l.sumOf { it.qty } }
         for ((col, qty) in perColumn) {
@@ -260,7 +291,7 @@ object ClientDocs {
                         val parts = r.text.trim().split(Regex("\\s+"), limit = 2)
                         val pos = POSITION.find(parts[0]) ?: return@mapNotNull null
                         val desc = if (parts.size > 1) parts[1] else t.firstRightOf(r, 30f)?.text ?: return@mapNotNull null
-                        tireFromDescription(desc, if (pos.groupValues[1] == "1") "av" else "ar")
+                        tireFromDescription(desc, axleOfPosition(pos.groupValues[1].toInt()))
                     }
                 v += tireValues(tires)
             }

@@ -21,7 +21,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.automirrored.filled.Notes
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Handyman
 import androidx.compose.material.icons.filled.PrecisionManufacturing
@@ -53,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.vippneus.intervention.data.Completion
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.Naming
+import fr.vippneus.intervention.data.Pneus
 import fr.vippneus.intervention.data.Suggestions
 import fr.vippneus.intervention.data.Todo
 import fr.vippneus.intervention.data.displayStatus
@@ -117,7 +120,7 @@ private val SECTIONS = listOf(
 /** Section de la fiche où se trouve un élément à compléter. */
 private fun sectionOf(key: String): String = when {
     key == K.MARQUE || key == K.HORAMETRE -> "materiel"
-    key.startsWith("av.") || key.startsWith("ar.") -> "pneus"
+    FpsTemplate.isPneuKey(key) -> "pneus"
     key.startsWith("prest.") -> "prestations"
     key.startsWith("serrage") -> "serrage"
     key == Completion.SIGNATURE -> "signature"
@@ -311,28 +314,12 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
                 }
             }
 
-            SectionCard("Pneus fournis", nav.anchor("pneus"), icon = Icons.Filled.TireRepair, trailing = status("pneus")) {
-                PneuBlock(form, "av", "Pneus avant (AV) fournis")
-                SubHeader("Arrière") {
-                    VipButton(
-                        "Recopier l'avant",
-                        {
-                            vm.update(i.id) { cur ->
-                                var values = cur.values
-                                FpsTemplate.pneuColumns.forEach { (col, _, _) ->
-                                    val v = cur.value(K.pneu("av", col))
-                                    values = if (v.isEmpty()) values - K.pneu("ar", col) else values + (K.pneu("ar", col) to v)
-                                }
-                                cur.value(K.AV_FOURNI).let { v -> values = if (v.isEmpty()) values - K.AR_FOURNI else values + (K.AR_FOURNI to v) }
-                                cur.copy(values = values)
-                            }
-                        },
-                        icon = Icons.Filled.ContentCopy,
-                        tone = Tone.GHOST,
-                        compact = true,
-                    )
-                }
-                PneuBlock(form, "ar", "Pneus arrière (AR) fournis")
+            SectionCard(
+                "Pneus montés", nav.anchor("pneus"), icon = Icons.Filled.TireRepair,
+                subtitle = "Une ligne par essieu ; les roues intérieures sur une ligne à part",
+                trailing = status("pneus"),
+            ) {
+                PneuRows(form)
             }
 
             SectionCard(
@@ -393,15 +380,68 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
     }
 }
 
+/** Tableau « Fournitures » : AV, AR, puis autres essieux et roues intérieures, ajoutés à la demande. */
 @Composable
-private fun PneuBlock(form: Form, essieu: String, title: String) {
-    val key = if (essieu == "av") K.AV_FOURNI else K.AR_FOURNI
+private fun PneuRows(form: Form) {
+    val vm = form.vm
+    val i = form.i
+    val extra = FpsTemplate.extraPneuRows
+    // Lignes ouvertes avec « Ajouter » et pas encore remplies
+    var opened by rememberSaveable(i.id) { mutableIntStateOf(0) }
+    val shown = maxOf(Pneus.extraCount(i), opened).coerceAtMost(extra.size)
+
+    PneuBlock(form, "av", "Pneus avant (AV) fournis")
+    SubHeader("Arrière (AR)") {
+        CopyButton("Recopier l'avant") { vm.update(i.id) { Pneus.copy(it, "av", "ar") } }
+    }
+    PneuBlock(form, "ar", "Pneus arrière (AR) fournis")
+    extra.take(shown).forEach { row ->
+        val above = FpsTemplate.pneuRows[FpsTemplate.pneuRows.indexOf(row) - 1].key
+        SubHeader(form.value(K.essieu(row.key)).ifBlank { "Autre essieu" }) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                CopyButton("Recopier la ligne du dessus") { vm.update(i.id) { Pneus.copy(it, above, row.key) } }
+                VipButton(
+                    "Retirer",
+                    {
+                        opened = shown - 1
+                        vm.update(i.id) { Pneus.remove(it, row.key) }
+                    },
+                    icon = Icons.Filled.Close,
+                    tone = Tone.GHOST,
+                    compact = true,
+                )
+            }
+        }
+        form.Field(
+            K.essieu(row.key), "Essieu / roues", Modifier.width(360.dp),
+            placeholder = "ex. Essieu 3, AR int.",
+            caps = KeyboardCapitalization.Sentences,
+        )
+        PneuBlock(form, row.key, "Pneus fournis")
+    }
+    if (shown < extra.size) {
+        VipButton(
+            "Ajouter un essieu ou des roues intérieures",
+            { opened = shown + 1 },
+            icon = Icons.Filled.Add,
+            tone = Tone.GHOST,
+        )
+    }
+}
+
+@Composable
+private fun CopyButton(text: String, onClick: () -> Unit) =
+    VipButton(text, onClick, icon = Icons.Filled.ContentCopy, tone = Tone.GHOST, compact = true)
+
+@Composable
+private fun PneuBlock(form: Form, row: String, title: String) {
+    val key = K.fourni(row)
     YesNo(title, form.value(key).ifEmpty { null }, { form.set(key, it.orEmpty()) })
     val cols = FpsTemplate.pneuColumns
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         cols.take(3).forEach { (col, label, _) ->
             form.Field(
-                K.pneu(essieu, col), label, Modifier.weight(1f),
+                K.pneu(row, col), label, Modifier.weight(1f),
                 caps = if (col == "dimensions") KeyboardCapitalization.None else KeyboardCapitalization.Words,
             )
         }
@@ -409,7 +449,7 @@ private fun PneuBlock(form: Form, essieu: String, title: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         cols.drop(3).forEach { (col, label, _) ->
             form.Field(
-                K.pneu(essieu, col), label, Modifier.weight(1f),
+                K.pneu(row, col), label, Modifier.weight(1f),
                 keyboard = if (col == "quantite") KeyboardType.Number else KeyboardType.Text,
             )
         }

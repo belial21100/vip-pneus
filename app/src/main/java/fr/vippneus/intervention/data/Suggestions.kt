@@ -1,5 +1,6 @@
 package fr.vippneus.intervention.data
 
+import fr.vippneus.intervention.pdf.FpsTemplate
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import java.text.Normalizer
 import java.util.Locale
@@ -16,9 +17,12 @@ object Suggestions {
         "if.recuPar",
     )
 
-    /** Regroupe les champs équivalents (pneus AV/AR, serrages...). */
+    /** Proposé pour l'essieu d'une ligne de pneus ajoutée, en plus de ce qui a déjà été saisi. */
+    val ESSIEUX = listOf("Essieu 2", "Essieu 3", "Essieu 4", "AR int.", "Essieu 2 int.", "Essieu 3 int.")
+
+    /** Regroupe les champs équivalents (lignes de pneus, serrages...). */
     fun group(key: String): String? = when {
-        key.startsWith("av.") || key.startsWith("ar.") ->
+        FpsTemplate.isPneuKey(key) ->
             key.substringAfter('.').takeIf { it != "fourni" && it != "quantite" }?.let { "pneu.$it" }
         key == K.SERRAGE_AV || key == K.SERRAGE_AR -> "serrage"
         key == K.SERRAGE_AV_REMARQUE || key == K.SERRAGE_AR_REMARQUE -> "serrage.remarque"
@@ -47,9 +51,10 @@ object Suggestions {
 
     fun filter(all: Map<String, List<String>>, key: String, typed: String, max: Int = 8): List<String> {
         val g = group(key) ?: return emptyList()
-        val list = all[g] ?: return emptyList()
+        val list = all[g].orEmpty() + (if (g == "pneu.essieu") ESSIEUX else emptyList())
         val t = normalize(typed)
         return list.asSequence()
+            .distinctBy { it.lowercase(Locale.FRANCE) }
             .filter { !it.equals(typed.trim(), ignoreCase = true) }
             .filter { t.isEmpty() || normalize(it).contains(t) }
             .take(max)

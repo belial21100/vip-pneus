@@ -164,6 +164,38 @@ class PdfExportTest {
         PDDocument.load(result).use { assertEquals(1, it.numberOfPages) }
     }
 
+    /** Porteur 3 essieux, roues jumelées : lignes ajoutées au tableau « Fournitures ». */
+    @Test
+    fun ficheFps_plusieursEssieuxEtRouesInterieures() {
+        val dir = File(out, "fps-essieux").apply { deleteRecursively(); mkdirs() }
+        val base = sampleFps(dir)
+        val truck = mapOf(
+            K.MARQUE to "Renault Trucks", K.TYPE to "C 430 6x4", K.SERIE to "VF6BA000000000000", K.PARC to "PL-12",
+            K.pneu("av", "dimensions") to "385/65 R22.5", K.pneu("av", "marque") to "Michelin",
+            K.pneu("av", "profil") to "X Multi Z", K.pneu("av", "type") to "Pneumatique", K.pneu("av", "quantite") to "2",
+            K.pneu("ar", "dimensions") to "315/80 R22.5", K.pneu("ar", "marque") to "Michelin",
+            K.pneu("ar", "profil") to "X Works D", K.pneu("ar", "type") to "Pneumatique", K.pneu("ar", "quantite") to "2",
+            K.essieu("sup1") to "AR int.", K.fourni("sup1") to "non",
+            K.pneu("sup1", "dimensions") to "315/80 R22.5", K.pneu("sup1", "marque") to "Michelin",
+            K.pneu("sup1", "profil") to "X Works D", K.pneu("sup1", "type") to "Pneumatique", K.pneu("sup1", "quantite") to "2",
+            K.essieu("sup2") to "Essieu 3", K.fourni("sup2") to "oui",
+            K.pneu("sup2", "dimensions") to "315/80 R22.5", K.pneu("sup2", "marque") to "Continental",
+            K.pneu("sup2", "profil") to "HD3", K.pneu("sup2", "type") to "Pneumatique", K.pneu("sup2", "quantite") to "2",
+            K.essieu("sup3") to "Essieu 3 intérieures", K.pneu("sup3", "dimensions") to "315/80 R22.5",
+            K.pneu("sup3", "quantite") to "2",
+            K.essieu("sup4") to "Roue de secours", K.pneu("sup4", "dimensions") to "315/80 R22.5",
+            K.pneu("sup4", "quantite") to "1",
+        )
+        val i = base.copy(values = base.values - K.AR_FOURNI + truck, overlays = emptyList())
+        val result = File(out, "fiche-fps-essieux.pdf")
+        PdfExporter(context).export(i, dir, result, "Fiche essieux", "Chris.E")
+        PDDocument.load(result).use { doc ->
+            assertEquals(1, doc.numberOfPages)
+            val text = PDFTextStripper().getText(doc)
+            for (t in listOf("AR int.", "Essieu 3", "385/65 R22.5", "Continental", "Roue de secours")) assertTrue(t, text.contains(t))
+        }
+    }
+
     /** Document client dont la page 1 est pivotée et recadrée : les ajouts doivent rester droits et bien placés. */
     @Test
     fun documentClient_pagePivotee() {

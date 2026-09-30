@@ -1,12 +1,13 @@
 package fr.vippneus.intervention.pdf
 
 /**
- * Gabarit de la « Fiche d'intervention presse mobile » (FPS).
+ * Gabarit de la « Fiche d'intervention presse mobile » (reprise de la fiche FPS, au logo VIP).
  *
  * Le fond est l'image de la fiche vierge (assets/templates). Les zones de saisie ont été
  * relevées sur les fiches remplies par les techniciens : positions en pixels de l'image
  * (1449 × 2048), converties en points PDF (page A4 595 × 842). Les tailles de police
  * reprennent celles utilisées sur les exemples (texte réduit automatiquement s'il est trop long).
+ * Le tableau « Fournitures » a six lignes : AV, AR, puis les autres essieux et roues intérieures.
  */
 object FpsTemplate {
     const val BACKGROUND_ASSET = "templates/fiche_presse_mobile.jpg"
@@ -57,7 +58,11 @@ object FpsTemplate {
 
         const val AV_FOURNI = "av.fourni"
         const val AR_FOURNI = "ar.fourni"
-        fun pneu(essieu: String, col: String) = "$essieu.$col"
+        /** Case d'une ligne du tableau « Fournitures » ([row] : av, ar, sup1…sup4). */
+        fun pneu(row: String, col: String) = "$row.$col"
+        fun fourni(row: String) = pneu(row, "fourni")
+        /** Essieu ou roues d'une ligne à préciser (ex. « Essieu 3 », « AR int. »). */
+        fun essieu(row: String) = pneu(row, "essieu")
 
         fun prestation(row: String, col: String) = "prest.$row.$col"
         const val DEPLACEMENT = "deplacement"
@@ -79,13 +84,37 @@ object FpsTemplate {
         const val SIGNATURE = "signature"
     }
 
-    /** Colonnes des tableaux « Pneus AV / AR » : clé -> (libellé, x0, x1 en pixels). */
+    /**
+     * Ligne du tableau « Fournitures » : [printed] est l'essieu imprimé sur la fiche (AV, AR) ;
+     * sans lui, c'est une ligne à préciser, dont l'essieu est écrit par le technicien. y0, y1 en pixels.
+     */
+    class PneuRow(val key: String, val printed: String?, val y0: Int, val y1: Int) {
+        /** Nom de la ligne dans l'application (« AV », « ligne 3 »). */
+        val name: String get() = printed ?: "ligne ${pneuRows.indexOf(this) + 1}"
+    }
+
+    val pneuRows = listOf(
+        PneuRow("av", "AV", 830, 861),
+        PneuRow("ar", "AR", 863, 894),
+        PneuRow("sup1", null, 896, 927),
+        PneuRow("sup2", null, 929, 960),
+        PneuRow("sup3", null, 962, 993),
+        PneuRow("sup4", null, 995, 1026),
+    )
+
+    /** Lignes à préciser : autres essieux, roues intérieures. */
+    val extraPneuRows = pneuRows.filter { it.printed == null }
+
+    /** Clé d'une case du tableau « Fournitures ». */
+    fun isPneuKey(key: String) = pneuRows.any { key.startsWith(it.key + ".") }
+
+    /** Colonnes du tableau « Fournitures » : clé -> (libellé, x0, x1 en pixels). */
     val pneuColumns = listOf(
-        Triple("dimensions", "Dimensions", 452 to 590),
-        Triple("marque", "Marque", 601 to 781),
-        Triple("profil", "Profil", 792 to 985),
-        Triple("type", "Type", 996 to 1175),
-        Triple("quantite", "Quantité", 1186 to 1363),
+        Triple("dimensions", "Dimensions", 454 to 624),
+        Triple("marque", "Marque", 638 to 810),
+        Triple("profil", "Profil", 824 to 995),
+        Triple("type", "Type", 1009 to 1180),
+        Triple("quantite", "Quantité", 1194 to 1366),
     )
 
     /** Lignes du tableau « Prestations » : clé -> (libellé, y0, y1). */
@@ -134,13 +163,16 @@ object FpsTemplate {
             add(Field(key, label, box(xs.first, 690, xs.second, 731), 16f, HAlign.CENTER, minFontSize = 7f))
         }
 
-        // Fournitures : pneus avant / arrière
-        listOf("av" to (854 to 890), "ar" to (977 to 1013)).forEach { (essieu, ys) ->
+        // Fournitures : une ligne par essieu (AV, AR, puis autres essieux et roues intérieures)
+        pneuRows.forEach { row ->
+            if (row.printed == null) {
+                add(Field(K.essieu(row.key), "Essieu (${row.name})", box(84, row.y0, 254, row.y1), 12f, HAlign.CENTER, minFontSize = 6f))
+            }
             pneuColumns.forEach { (col, label, xs) ->
                 add(
                     Field(
-                        K.pneu(essieu, col), "$label (${essieu.uppercase()})",
-                        box(xs.first, ys.first, xs.second, ys.second), 15f, HAlign.CENTER, minFontSize = 6f,
+                        K.pneu(row.key, col), "$label (${row.name})",
+                        box(xs.first, row.y0, xs.second, row.y1), 12f, HAlign.CENTER, minFontSize = 6f,
                     )
                 )
             }
@@ -187,15 +219,11 @@ object FpsTemplate {
 
     val fieldsByKey: Map<String, Field> = fields.associateBy { it.key }
 
-    val choices: List<Choice> = listOf(
-        Choice(
-            K.AV_FOURNI, "Pneus AV fournis",
-            listOf(Option("oui", "Oui", px(332.5), py(826.5)), Option("non", "Non", px(332.5), py(853.5))),
-        ),
-        Choice(
-            K.AR_FOURNI, "Pneus AR fournis",
-            listOf(Option("oui", "Oui", px(332.5), py(948.5)), Option("non", "Non", px(332.5), py(976.5))),
-        ),
+    val choices: List<Choice> = pneuRows.map { row ->
+        // Cases « Oui ☐  Non ☐ » de la colonne « Fournis », centrées sur la ligne
+        val cy = py((row.y0 + row.y1 + 1) / 2f)
+        Choice(K.fourni(row.key), "Pneus ${row.name} fournis", listOf(Option("oui", "Oui", px(329), cy), Option("non", "Non", px(417), cy)))
+    } + listOf(
         Choice(
             K.DEPLACEMENT, "Déplacement pour prestation < 4 pneus",
             listOf(Option("oui", "Oui", px(660.5), py(1408)), Option("non", "Non", px(660.5), py(1442.5))),
