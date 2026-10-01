@@ -10,9 +10,11 @@ import android.view.View
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithText
@@ -33,6 +35,7 @@ import fr.vippneus.intervention.data.DocKeys
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Naming
 import fr.vippneus.intervention.data.Overlay
+import fr.vippneus.intervention.data.PlTyres
 import fr.vippneus.intervention.data.OverlayKind
 import fr.vippneus.intervention.data.Recap
 import fr.vippneus.intervention.data.Settings
@@ -41,6 +44,8 @@ import fr.vippneus.intervention.data.SignatureData
 import fr.vippneus.intervention.data.ThemeMode
 import fr.vippneus.intervention.data.displayStatus
 import fr.vippneus.intervention.pdf.FpsTemplate.K
+import fr.vippneus.intervention.pdf.PlKeys
+import fr.vippneus.intervention.pdf.TyreTable
 import fr.vippneus.intervention.ui.AppRoot
 import fr.vippneus.intervention.ui.AppViewModel
 import fr.vippneus.intervention.ui.Screen
@@ -171,7 +176,7 @@ class UiFlowTest {
         compose.setContent { VipTheme { AppRoot(vm) } }
         snap("01-accueil-vide")
 
-        compose.onNodeWithText("Nouvelle fiche d'intervention").performClick()
+        compose.onNodeWithText("Nouvelle fiche presse mobile").performClick()
         compose.waitForIdle()
         assertTrue(vm.backStack.last() is Screen.Fps)
         input("Client mandataire", "Loc Manutention")
@@ -334,6 +339,56 @@ class UiFlowTest {
         assertEquals("", current().value(K.pneu("sup1", "dimensions")))
     }
 
+    /** Fiche poids lourds : une roue touchée sur le schéma, pneu monté et démonté, roue cochée sur la fiche. */
+    @Test
+    fun fichePoidsLourds_schemaDesPositions() {
+        val vm = newVm()
+        configure(vm)
+        compose.setContent { VipTheme { AppRoot(vm) } }
+        idle(4)
+        compose.onNodeWithText("Nouvelle fiche poids lourds").performClick()
+        idle(4)
+        val id = (vm.backStack.last() as Screen.Fps).id
+        fun current() = vm.interventions.value.first { it.id == id }
+        assertEquals(InterventionType.PL, current().type)
+        assertEquals("Chris.E", current().value(K.MONTEUR))
+        input("Nom du donneur d'ordre", "Transports Test")
+        input("Lieu du dépannage", "A26 sortie 13")
+        idle(4)
+        snap("16-fiche-pl-saisie")
+
+        compose.onAllNodesWithText("Roues et pneus")[0].performClick()
+        idle()
+        snap("16b-fiche-pl-schema")
+        compose.onNodeWithContentDescription("Roue 2 AR D ext").performScrollTo().performClick()
+        idle(4)
+        // Dans la fenêtre de la roue : pneu monté, puis pneu démonté
+        fun dialogField(label: String, n: Int) = compose.onAllNodes(hasText(label) and hasSetTextAction() and hasAnyAncestor(isDialog()))[n]
+        dialogField("Dimensions", 0).performTextInput("315/80 R22.5")
+        dialogField("Marque", 0).performTextInput("Michelin")
+        dialogField("Usure", 1).performTextInput("3")
+        compose.onNodeWithText("Même dimension et marque").performClick()
+        idle(4)
+        snap("16c-fiche-pl-roue")
+        compose.onNodeWithText("Valider").performClick()
+        idle(4)
+        assertEquals("2 AR D ext", current().value(PlKeys.tyre(TyreTable.MONTES, 1, "position")))
+        assertEquals("315/80 R22.5", current().value(PlKeys.tyre(TyreTable.DEMONTES, 1, "dimensions")))
+        assertEquals("3", current().value(PlKeys.tyre(TyreTable.DEMONTES, 1, "usure")))
+        assertEquals("Michelin", current().value(PlKeys.tyre(TyreTable.DEMONTES, 1, "marque")))
+        assertEquals("", current().value(K.MARQUE))
+        assertTrue(Completion.todos(current()).single { it.key == Completion.PL_TRAVAIL }.done)
+        snap("16d-fiche-pl-roue-saisie")
+
+        // Roue seulement cochée (réparation)
+        compose.onNodeWithContentDescription("Roue 1 ESS G ext").performScrollTo().performClick()
+        idle(4)
+        compose.onNodeWithText("Valider").performClick()
+        idle(10)
+        assertEquals(setOf("2 AR D ext", "1 ESS G ext"), PlTyres.usedPositions(current()))
+        snap("16e-fiche-pl-roues-cochees")
+    }
+
     @Test
     @Config(qualifiers = "w800dp-h1280dp-port-mdpi")
     fun ficheFps_portrait() {
@@ -341,7 +396,7 @@ class UiFlowTest {
         configure(vm)
         compose.setContent { VipTheme { AppRoot(vm) } }
         snap("07a-accueil-portrait")
-        compose.onNodeWithText("Nouvelle fiche d'intervention").performClick()
+        compose.onNodeWithText("Fiche presse mobile").performClick()
         snap("07-fiche-portrait-saisie")
         compose.onNodeWithText("Aperçu").performClick()
         snap("08-fiche-portrait-apercu")

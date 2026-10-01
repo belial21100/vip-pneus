@@ -6,22 +6,29 @@ les bons restent enregistrés sur la tablette.
 
 ## Principe
 
-Trois sortes de bons :
+Quatre sortes de bons :
 
-- **Fiche d'intervention** (Mac2, Conti…) : la fiche presse mobile, au logo VIP, créée avec
-  **Nouvelle fiche d'intervention**. On y joint le bon de commande du client : ses
+- **Fiche presse mobile** (Mac2, Conti…) : la fiche d'intervention presse mobile, au logo VIP,
+  créée avec **Nouvelle fiche presse mobile**. On y joint le bon de commande du client : ses
   informations **remplissent automatiquement** la fiche, et il la suit dans le PDF.
   PDF envoyé = la fiche, puis le bon de commande.
+- **Fiche poids lourds** (dépannage, plusieurs essieux, roues jumelées) : la fiche d'intervention
+  de VIP, reprise à l'identique (A4 à l'italienne), créée avec **Nouvelle fiche poids lourds**.
+  Le technicien **touche les roues sur le schéma** (porteur / tracteur 1 AV à 3 AR et roue de
+  secours, remorque 1 à 3 ESS et roue de secours) : pour chacune, pneu monté et pneu démonté
+  (dimensions, marque, matricule, usure) ; les tableaux « Pneus montés / démontés » se
+  remplissent avec la position, et la roue est cochée sur la fiche. Puis fournitures, services,
+  observations et signature.
 - **Feuille de tâche Mastra** : le document du client est lui-même la fiche. On
   l'**importe** et le technicien écrit directement dans ses cases ; PDF envoyé = page 1
   le document rempli, page 2 le document d'origine.
 - **Document à signer** (bon de livraison…) : tout autre document importé. Seule la
   signature du client est exigée ; on peut aussi y écrire librement.
 
-**L'import ne crée jamais de fiche d'intervention** : un document importé est une feuille
+**L'import ne crée jamais de fiche presse mobile** : un document importé est une feuille
 Mastra à remplir ou un document à signer. Un bon de commande importé seul est traité comme
 un document à signer (ses informations servent au nom du fichier) ; pour la fiche
-d'intervention, on le joint à une nouvelle fiche.
+presse mobile, on le joint à une nouvelle fiche.
 
 ### Documents reconnus automatiquement
 
@@ -38,19 +45,23 @@ Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office
 
 1. **Importer un document** (bouton jaune de l'accueil, ou « Ouvrir avec / Partager →
    VIP Pneus » depuis la messagerie) pour une feuille Mastra ou un document à signer ;
-   ou **Nouvelle fiche d'intervention** pour Mac2 et Conti, puis **Joindre** le bon de
-   commande (en tête de la fiche).
+   ou **Nouvelle fiche presse mobile** pour Mac2 et Conti, puis **Joindre** le bon de
+   commande (en tête de la fiche) ; ou **Nouvelle fiche poids lourds** pour un dépannage.
 2. Les champs lus dans le document sont surlignés en jaune (✦) : les vérifier. Le cadre
    **À compléter** nomme chaque élément qui manque encore (horamètre, serrage, signature…)
    avec ce qu'il faut faire ; un appui mène directement au champ. Les champs attendus
    portent la mention « À compléter » et chaque rubrique une pastille « À compléter » ou
    « Complet ». Ce qui manque est aussi rappelé dans la barre d'envoi, sur la liste des bons
    et au-dessus de l'aperçu du PDF. L'aperçu de la page se met à jour en direct.
-3. **Pneus montés** (tableau « Fournitures » de la fiche) : une ligne AV et une ligne AR, puis
+3. **Pneus montés** (fiche presse mobile, tableau « Fournitures ») : une ligne AV et une ligne AR, puis
    **Ajouter un essieu ou des roues intérieures** pour les véhicules à plusieurs essieux ou
    roues jumelées (jusqu'à 4 lignes de plus). L'essieu de chaque ligne ajoutée est à préciser
    (« Essieu 3 », « AR int. »… proposés à la saisie) ; « Recopier la ligne du dessus » reprend
-   les pneus de la ligne précédente.
+   les pneus de la ligne précédente. Sur la **fiche poids lourds**, rubrique **Roues et pneus** :
+   un appui sur une roue du schéma ouvre la saisie du pneu monté et du pneu démonté (« Même
+   dimension et marque » recopie le monté) ; sans pneu, la roue est seulement cochée
+   (réparation, contrôle…). « Retirer » efface la roue. Huit pneus montés et huit démontés au plus,
+   comme sur la fiche papier.
 4. **Faire signer** le client au doigt ou au stylet (son nom se saisit dans la même fenêtre).
 5. Au besoin, écrire sur la page (ou **Ajuster** la fiche) : déplacer un texte, changer sa
    taille, ajouter une mention, une date, une croix ou une signature (pincer pour zoomer).
@@ -91,6 +102,8 @@ Des photos (bon papier, pneus…) et d'autres PDF peuvent être ajoutés à la s
 Nom de fichier par défaut, sur le modèle déjà utilisé :
 `02- LOC TEST ENTREPOT DUPONT 02000 LAON 1234567 24-08-2026 CE.pdf`
 (département, client, site, code postal, ville, n° de commande, date, initiales) ;
+pour la fiche poids lourds : `51- <donneur d'ordre> <client> <immatriculation> <n°> <date> <initiales>.pdf`
+(département tiré de l'adresse ou du lieu du dépannage) ;
 pour Mastra : `54- MASTRA <livrer à> JobSheet_<n°> <date> <initiales>.pdf` ;
 document sans informations saisies (bon de livraison) : nom du fichier reçu, date, initiales.
 
@@ -123,17 +136,22 @@ désinstaller l'application (et perdre les bons enregistrés) pour installer une
 
 - Kotlin, Jetpack Compose (Material 3), PdfBox-Android pour la lecture et l'écriture des PDF.
 - `app/src/main/java/fr/vippneus/intervention/`
-  - `pdf/FpsTemplate.kt` : zones de saisie de la fiche (positions et tailles relevées
-    sur des fiches remplies par les techniciens ; tableau « Fournitures » à 6 lignes) ;
+  - `pdf/Sheet.kt` : fiche intégrée (fond de page, zones de saisie, cases, signature) ;
+  - `pdf/FpsTemplate.kt` : fiche presse mobile (positions et tailles relevées sur des fiches
+    remplies par les techniciens ; tableau « Fournitures » à 6 lignes) ;
     `data/Pneus.kt` : lignes de pneus ajoutées (recopier, retirer) ;
+  - `pdf/PlTemplate.kt` : fiche poids lourds (cases relevées sur le PDF de VIP, roues du schéma) ;
+    `data/PlTyres.kt` : pneus montés / démontés rangés par position ;
   - `pdf/Layout.kt` : mise en page commune à l'aperçu écran et au PDF (ce que l'on voit
     est ce que l'on obtient) ; `pdf/PdfExporter.kt` : création du PDF final ;
   - `importer/` : lecture du texte positionné des PDF, reconnaissance des documents
     clients et pré-remplissage (`ClientDocs.kt`) ;
   - `data/Completion.kt` : ce qu'il reste à remplir sur un bon (cadre « À compléter ») ;
     `data/Recap.kt` : récapitulatif mensuel pour la comptabilité ;
-  - `ui/` : écrans (accueil, fiche, document client, éditeur de page, signature, réglages) ;
+  - `ui/` : écrans (accueil, fiches presse mobile et poids lourds, document client, éditeur de page, signature, réglages) ;
     `Theme.kt` (graphite et jaune, police Barlow) et `Components.kt` (éléments communs).
+- `app/src/main/assets/templates/fiche_poids_lourds.pdf` : fiche poids lourds vierge (page 1 du PDF
+  envoyé) ; `fiche_poids_lourds.jpg` : la même en image, pour l'aperçu à l'écran.
 - `app/src/main/assets/templates/fiche_presse_mobile.jpg` : fiche vierge (fond de page) : la fiche
   FPS d'origine, avec le logo VIP et un tableau « Fournitures » à 6 lignes (essieu, fournis
   oui / non, dimensions, marque, profil, type, quantité).

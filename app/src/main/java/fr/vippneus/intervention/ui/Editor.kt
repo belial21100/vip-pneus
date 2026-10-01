@@ -95,7 +95,8 @@ import fr.vippneus.intervention.data.SignatureData
 import fr.vippneus.intervention.pdf.Box as PageBox
 import fr.vippneus.intervention.pdf.CrossOp
 import fr.vippneus.intervention.pdf.DrawOp
-import fr.vippneus.intervention.pdf.FpsLayout
+import fr.vippneus.intervention.pdf.SheetLayout
+import fr.vippneus.intervention.pdf.sheet
 import fr.vippneus.intervention.pdf.FpsTemplate
 import fr.vippneus.intervention.pdf.PanelOp
 import fr.vippneus.intervention.pdf.SignatureOp
@@ -226,7 +227,7 @@ fun PageEditor(
 
     fun isTextField(key: String) =
         current.template?.fields?.any { it.key == key } == true ||
-            (current.type == InterventionType.FPS && FpsTemplate.fieldsByKey[key] != null)
+            current.type.sheet?.fieldsByKey?.get(key) != null
 
     /** Case vide touchée avec l'outil adapté (ou sans outil) : on la remplit directement. */
     fun fillSlot(p: Offset): Boolean {
@@ -658,7 +659,7 @@ private fun emptySlots(i: Intervention): List<Slot> {
         Slot(f.key, f.label.substringBefore(" ("), PageBox(f.left, f.top, f.right, f.bottom).offset(a?.dx ?: 0f, a?.dy ?: 0f))
     }
     val signature = t.signature?.takeIf { i.signature?.isEmpty != false }?.let { b ->
-        Slot("slot.signature", "Signature", FpsLayout.scaledBox(PageBox(b.left, b.top, b.right, b.bottom), i.adjust[FpsTemplate.K.SIGNATURE]), signature = true)
+        Slot("slot.signature", "Signature", SheetLayout.scaledBox(PageBox(b.left, b.top, b.right, b.bottom), i.adjust[FpsTemplate.K.SIGNATURE]), signature = true)
     }
     return fields + listOfNotNull(signature)
 }
@@ -745,7 +746,7 @@ private fun SelectionBar(
     onDelete: () -> Unit,
     onClose: () -> Unit,
 ) {
-    val isFpsElement = overlay == null && (intervention.type == InterventionType.FPS || intervention.template != null)
+    val isFpsElement = overlay == null && (intervention.type.isSheet || intervention.template != null)
     val label = when {
         overlay != null -> when (overlay.kind) {
             OverlayKind.TEXT -> "Texte libre"

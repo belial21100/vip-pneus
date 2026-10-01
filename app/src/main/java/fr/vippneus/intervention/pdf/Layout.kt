@@ -146,7 +146,7 @@ object TextLayout {
     }
 
     /** Place un champ du gabarit : réduction automatique du corps si le texte est trop long. */
-    fun layoutField(f: FpsTemplate.Field, text: String, adj: FieldAdjust?, m: TextMeasure): TextOp {
+    fun layoutField(f: Field, text: String, adj: FieldAdjust?, m: TextMeasure): TextOp {
         val manual = adj?.fontSize
         var size = manual ?: f.fontSize
         val maxW = f.box.width
@@ -177,8 +177,8 @@ object TextLayout {
             lines = lines,
             xs = { _, w ->
                 dx + when (f.align) {
-                    FpsTemplate.HAlign.START -> f.box.left
-                    FpsTemplate.HAlign.CENTER -> f.box.centerX - w / 2f
+                    HAlign.START -> f.box.left
+                    HAlign.CENTER -> f.box.centerX - w / 2f
                 }
             },
             firstBaseline = firstBaseline + dy,
@@ -188,32 +188,37 @@ object TextLayout {
     }
 }
 
-/** Mise en page de la fiche FPS à partir des valeurs saisies. */
-object FpsLayout {
+/** Mise en page d'une fiche intégrée (presse mobile, poids lourds) à partir des valeurs saisies. */
+object SheetLayout {
     fun build(
+        sheet: Sheet,
         values: Map<String, String>,
         signature: SignatureData?,
         adjust: Map<String, FieldAdjust>,
         m: TextMeasure,
     ): List<DrawOp> {
         val ops = mutableListOf<DrawOp>()
-        for (f in FpsTemplate.fields) {
+        for (f in sheet.fields) {
             val text = values[f.key]?.trim().orEmpty()
             if (text.isEmpty()) continue
             ops += TextLayout.layoutField(f, text, adjust[f.key], m)
         }
-        for (c in FpsTemplate.choices) {
+        for (c in sheet.choices) {
             val v = values[c.key] ?: continue
             val opt = c.options.firstOrNull { it.value == v } ?: continue
-            val adj = adjust[c.key]
-            val half = FpsTemplate.crossHalf * (adj?.scale ?: 1f)
-            ops += CrossOp(c.key, opt.cx + (adj?.dx ?: 0f), opt.cy + (adj?.dy ?: 0f), half, max(0.9f, half * 0.3f))
+            ops += cross(c.key, opt.cx, opt.cy, sheet.crossHalf, adjust[c.key])
         }
+        for (mark in sheet.marks(values)) ops += cross(mark.key, mark.cx, mark.cy, mark.half, adjust[mark.key])
         if (signature != null && !signature.isEmpty) {
             val adj = adjust[FpsTemplate.K.SIGNATURE]
-            ops += SignatureOp(FpsTemplate.K.SIGNATURE, signature, scaledBox(FpsTemplate.signatureBox, adj))
+            ops += SignatureOp(FpsTemplate.K.SIGNATURE, signature, scaledBox(sheet.signatureBox, adj))
         }
         return ops
+    }
+
+    private fun cross(key: String, cx: Float, cy: Float, half: Float, adj: FieldAdjust?): CrossOp {
+        val h = half * (adj?.scale ?: 1f)
+        return CrossOp(key, cx + (adj?.dx ?: 0f), cy + (adj?.dy ?: 0f), h, max(0.9f, h * 0.3f))
     }
 
     fun scaledBox(b: Box, adj: FieldAdjust?): Box {
@@ -226,12 +231,12 @@ object FpsLayout {
     }
 }
 
-fun PlacedField.toField() = FpsTemplate.Field(
+fun PlacedField.toField() = Field(
     key = key,
     label = label,
     box = Box(left, top, right, bottom),
     fontSize = fontSize,
-    align = if (center) FpsTemplate.HAlign.CENTER else FpsTemplate.HAlign.START,
+    align = if (center) HAlign.CENTER else HAlign.START,
     maxLines = maxLines,
     minFontSize = minFontSize,
 )
@@ -257,7 +262,7 @@ object TemplateLayout {
         if (box != null && signature != null && !signature.isEmpty) {
             ops += SignatureOp(
                 FpsTemplate.K.SIGNATURE, signature,
-                FpsLayout.scaledBox(Box(box.left, box.top, box.right, box.bottom), adjust[FpsTemplate.K.SIGNATURE]),
+                SheetLayout.scaledBox(Box(box.left, box.top, box.right, box.bottom), adjust[FpsTemplate.K.SIGNATURE]),
             )
         }
         return ops

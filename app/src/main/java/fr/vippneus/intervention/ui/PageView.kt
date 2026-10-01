@@ -27,12 +27,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import fr.vippneus.intervention.data.Intervention
-import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.pdf.Box
 import fr.vippneus.intervention.pdf.CanvasRenderer
 import fr.vippneus.intervention.pdf.DrawOp
 import fr.vippneus.intervention.pdf.Fonts
-import fr.vippneus.intervention.pdf.FpsTemplate
+import fr.vippneus.intervention.pdf.Sheet
+import fr.vippneus.intervention.pdf.sheet
 import fr.vippneus.intervention.pdf.PdfPages
 import fr.vippneus.intervention.pdf.TextMeasure
 import kotlinx.coroutines.Dispatchers
@@ -45,10 +45,11 @@ object PageBitmaps {
     private const val RENDER_WIDTH = 1654 // ≈ 200 dpi pour un A4
     private val cache = LruCache<String, Bitmap>(3)
 
-    suspend fun fps(context: Context): Bitmap = withContext(Dispatchers.IO) {
-        cache.get("fps") ?: context.applicationContext.assets.open(FpsTemplate.BACKGROUND_ASSET).use {
+    /** Fiche vierge d'une fiche intégrée (presse mobile, poids lourds). */
+    suspend fun sheet(context: Context, sheet: Sheet): Bitmap = withContext(Dispatchers.IO) {
+        cache.get(sheet.imageAsset) ?: context.applicationContext.assets.open(sheet.imageAsset).use {
             BitmapFactory.decodeStream(it)
-        }.also { cache.put("fps", it) }
+        }.also { cache.put(sheet.imageAsset, it) }
     }
 
     suspend fun firstPage(file: File): Bitmap = withContext(Dispatchers.IO) {
@@ -62,10 +63,10 @@ object PageBitmaps {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount / 1024
     }
 
-    suspend fun fpsThumbnail(context: Context): Bitmap = withContext(Dispatchers.IO) {
-        thumbs.get("fps") ?: fps(context).let { full ->
+    suspend fun sheetThumbnail(context: Context, sheet: Sheet): Bitmap = withContext(Dispatchers.IO) {
+        thumbs.get(sheet.imageAsset) ?: sheet(context, sheet).let { full ->
             Bitmap.createScaledBitmap(full, THUMB_WIDTH, (full.height * THUMB_WIDTH.toFloat() / full.width).roundToInt(), true)
-        }.also { thumbs.put("fps", it) }
+        }.also { thumbs.put(sheet.imageAsset, it) }
     }
 
     suspend fun thumbnail(file: File): Bitmap = withContext(Dispatchers.IO) {
@@ -77,13 +78,12 @@ object PageBitmaps {
 @Composable
 fun rememberPageBackground(i: Intervention, sourceFile: File?): ImageBitmap? {
     val context = LocalContext.current
-    val key = if (i.type == InterventionType.FPS) "fps" else sourceFile?.path
+    val sheet = i.type.sheet
+    val key = sheet?.imageAsset ?: sourceFile?.path
     val bmp by produceState<ImageBitmap?>(null, key) {
         value = try {
-            when (i.type) {
-                InterventionType.FPS -> PageBitmaps.fps(context)
-                InterventionType.DOCUMENT -> sourceFile?.let { PageBitmaps.firstPage(it) }
-            }?.asImageBitmap()
+            (if (sheet != null) PageBitmaps.sheet(context, sheet) else sourceFile?.let { PageBitmaps.firstPage(it) })
+                ?.asImageBitmap()
         } catch (_: Throwable) {
             null
         }
@@ -95,13 +95,12 @@ fun rememberPageBackground(i: Intervention, sourceFile: File?): ImageBitmap? {
 @Composable
 fun rememberThumbnailBackground(i: Intervention, sourceFile: File?): ImageBitmap? {
     val context = LocalContext.current
-    val key = if (i.type == InterventionType.FPS) "fps" else sourceFile?.path
+    val sheet = i.type.sheet
+    val key = sheet?.imageAsset ?: sourceFile?.path
     val bmp by produceState<ImageBitmap?>(null, key) {
         value = try {
-            when (i.type) {
-                InterventionType.FPS -> PageBitmaps.fpsThumbnail(context)
-                InterventionType.DOCUMENT -> sourceFile?.let { PageBitmaps.thumbnail(it) }
-            }?.asImageBitmap()
+            (if (sheet != null) PageBitmaps.sheetThumbnail(context, sheet) else sourceFile?.let { PageBitmaps.thumbnail(it) })
+                ?.asImageBitmap()
         } catch (_: Throwable) {
             null
         }

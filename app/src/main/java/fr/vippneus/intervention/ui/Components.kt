@@ -709,17 +709,29 @@ private fun SuggestionPill(text: String, onClick: () -> Unit) {
 
 /** Choix Oui / Non (un second appui sur le choix actif l'efface). */
 @Composable
-fun YesNo(label: String, value: String?, onChange: (String?) -> Unit, modifier: Modifier = Modifier) {
+fun YesNo(label: String, value: String?, onChange: (String?) -> Unit, modifier: Modifier = Modifier) =
+    Segments(label, listOf("oui" to "Oui", "non" to "Non"), value, onChange, modifier)
+
+/** Choix parmi quelques valeurs (valeur -> libellé) ; un second appui sur le choix actif l'efface. */
+@Composable
+fun Segments(
+    label: String,
+    options: List<Pair<String, String>>,
+    value: String?,
+    onChange: (String?) -> Unit,
+    modifier: Modifier = Modifier,
+    itemWidth: Dp = 92.dp,
+) {
     val c = Vip.colors
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
         SingleChoiceSegmentedButtonRow {
-            listOf("oui" to "Oui", "non" to "Non").forEachIndexed { index, (v, text) ->
+            options.forEachIndexed { index, (v, text) ->
                 SegmentedButton(
                     selected = value == v,
                     onClick = { onChange(if (value == v) null else v) },
-                    shape = SegmentedButtonDefaults.itemShape(index, 2),
+                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
                     colors = SegmentedButtonDefaults.colors(
                         activeContainerColor = MaterialTheme.colorScheme.inverseSurface,
                         activeContentColor = MaterialTheme.colorScheme.inverseOnSurface,
@@ -727,7 +739,7 @@ fun YesNo(label: String, value: String?, onChange: (String?) -> Unit, modifier: 
                         inactiveContainerColor = c.card,
                         inactiveBorderColor = MaterialTheme.colorScheme.outlineVariant,
                     ),
-                    modifier = Modifier.width(92.dp),
+                    modifier = Modifier.width(itemWidth),
                     label = { Text(text, style = MaterialTheme.typography.labelLarge) },
                 )
             }

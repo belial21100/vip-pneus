@@ -2,6 +2,7 @@ package fr.vippneus.intervention.data
 
 import fr.vippneus.intervention.pdf.FpsTemplate
 import fr.vippneus.intervention.pdf.FpsTemplate.K
+import fr.vippneus.intervention.pdf.PlKeys
 import java.text.Normalizer
 import java.util.Locale
 
@@ -15,7 +16,11 @@ object Suggestions {
         DocKeys.CLIENT, DocKeys.SITE, DocKeys.CP, DocKeys.VILLE,
         // Feuille de tâche Mastra : personne qui signe, client final
         "if.recuPar",
+        // Fiche poids lourds
+        PlKeys.LIEU, PlKeys.VEHICULE,
     )
+
+    private val PL_PNEU = setOf("dimensions", "marque", "type")
 
     /** Proposé pour l'essieu d'une ligne de pneus ajoutée, en plus de ce qui a déjà été saisi. */
     val ESSIEUX = listOf("Essieu 2", "Essieu 3", "Essieu 4", "AR int.", "Essieu 2 int.", "Essieu 3 int.")
@@ -24,6 +29,9 @@ object Suggestions {
     fun group(key: String): String? = when {
         FpsTemplate.isPneuKey(key) ->
             key.substringAfter('.').takeIf { it != "fourni" && it != "quantite" }?.let { "pneu.$it" }
+        // Fiche poids lourds : dimensions, marques et types de pneus partagés avec la fiche presse mobile
+        key.startsWith(PlKeys.PREFIX) && !key.startsWith("pl.fourn.") && key.substringAfterLast('.') in PL_PNEU ->
+            "pneu." + key.substringAfterLast('.')
         key == K.SERRAGE_AV || key == K.SERRAGE_AR -> "serrage"
         key == K.SERRAGE_AV_REMARQUE || key == K.SERRAGE_AR_REMARQUE -> "serrage.remarque"
         key == K.CLIENT_MANDATAIRE || key == DocKeys.CLIENT -> "client"

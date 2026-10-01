@@ -5,7 +5,7 @@ import fr.vippneus.intervention.data.PanelLine
 import fr.vippneus.intervention.data.PlacedPanel
 import fr.vippneus.intervention.data.SignatureData
 import fr.vippneus.intervention.pdf.CrossOp
-import fr.vippneus.intervention.pdf.FpsLayout
+import fr.vippneus.intervention.pdf.SheetLayout
 import fr.vippneus.intervention.pdf.FpsTemplate
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import fr.vippneus.intervention.pdf.PanelLayout
@@ -64,7 +64,8 @@ class LayoutTest {
     @Test
     fun casesACocher_etSignature() {
         val sig = SignatureData(listOf(listOf(0f, 0f, 100f, 40f, 200f, 10f)), 300f, 100f, 6f)
-        val ops = FpsLayout.build(
+        val ops = SheetLayout.build(
+            FpsTemplate,
             mapOf(K.AV_FOURNI to "oui", K.DEPLACEMENT to "non", K.CLIENT_MANDATAIRE to "Loc Test"),
             sig, emptyMap(), m,
         )

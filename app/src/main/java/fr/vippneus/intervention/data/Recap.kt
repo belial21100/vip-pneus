@@ -30,7 +30,7 @@ object Recap {
             .sortedWith(compareBy({ Naming.interventionDate(it) }, { it.createdAt }))
 
     fun rows(bons: List<Intervention>, initiales: String): List<List<String>> = bons.map { i ->
-        val fps = i.type == InterventionType.FPS
+        val sheet = i.type.isSheet
         val status = i.displayStatus()
         val manque = when (status) {
             DisplayStatus.ENVOYE -> emptyList()
@@ -40,10 +40,14 @@ object Recap {
         listOf(
             Naming.interventionDate(i).format(DAY),
             Naming.kindLabel(i),
-            i.value(if (fps) K.CLIENT_MANDATAIRE else DocKeys.CLIENT),
-            i.value(if (fps) K.CLIENT_UTILISATEUR else DocKeys.SITE),
-            i.value(if (fps) K.UTILISATEUR_CP else DocKeys.CP),
-            if (fps) Naming.ville(i.value(K.UTILISATEUR_ADRESSE)) else i.value(DocKeys.VILLE),
+            i.value(if (sheet) K.CLIENT_MANDATAIRE else DocKeys.CLIENT),
+            i.value(if (sheet) K.CLIENT_UTILISATEUR else DocKeys.SITE),
+            when (i.type) {
+                InterventionType.FPS -> i.value(K.UTILISATEUR_CP)
+                InterventionType.PL -> Naming.cp(i.value(K.UTILISATEUR_ADRESSE))
+                InterventionType.DOCUMENT -> i.value(DocKeys.CP)
+            },
+            if (sheet) Naming.ville(i.value(K.UTILISATEUR_ADRESSE)) else i.value(DocKeys.VILLE),
             Naming.reference(i),
             Naming.fileName(i, initiales) + ".pdf",
             status.label,

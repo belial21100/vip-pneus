@@ -1,6 +1,7 @@
 package fr.vippneus.intervention.data
 
 import fr.vippneus.intervention.pdf.FpsTemplate.K
+import fr.vippneus.intervention.pdf.PlKeys
 import java.text.Normalizer
 import java.time.Instant
 import java.time.LocalDate
@@ -38,10 +39,14 @@ object Naming {
     /** Ville : partie après la dernière virgule d'une adresse (« 15 rue X, Laon » -> « Laon »). */
     fun ville(adresse: String): String =
         adresse.replace('\n', ',').split(',').map { it.trim() }.lastOrNull { it.isNotEmpty() }.orEmpty()
+            .replace(Regex("""^\d{5}\s+"""), "")
+
+    /** Premier code postal d'un texte. */
+    fun cp(vararg texts: String): String = texts.firstNotNullOfOrNull { CP_RE.find(it)?.groupValues?.get(1) }.orEmpty()
 
     fun interventionDate(i: Intervention): LocalDate {
         val raw = when (i.type) {
-            InterventionType.FPS -> i.value(K.DATE)
+            InterventionType.FPS, InterventionType.PL -> i.value(K.DATE)
             InterventionType.DOCUMENT -> i.value(DocKeys.DATE)
         }
         return parseDate(raw) ?: Instant.ofEpochMilli(i.createdAt).atZone(ZoneId.systemDefault()).toLocalDate()
@@ -61,6 +66,15 @@ object Naming {
                     i.value(K.CLIENT_UTILISATEUR).uppercase(Locale.FRANCE),
                     cp.uppercase(Locale.FRANCE),
                     ville.uppercase(Locale.FRANCE),
+                    i.value(K.NUMERO_COMMANDE),
+                )
+            }
+            InterventionType.PL -> {
+                dept = departement(i.value(K.UTILISATEUR_ADRESSE), i.value(PlKeys.LIEU), i.value(K.CLIENT_UTILISATEUR))
+                parts = listOf(
+                    i.value(K.CLIENT_MANDATAIRE).uppercase(Locale.FRANCE),
+                    i.value(K.CLIENT_UTILISATEUR).uppercase(Locale.FRANCE),
+                    i.value(K.SERIE).uppercase(Locale.FRANCE),
                     i.value(K.NUMERO_COMMANDE),
                 )
             }
@@ -111,7 +125,7 @@ object Naming {
     }
 
     fun title(i: Intervention): String = when (i.type) {
-        InterventionType.FPS -> listOf(i.value(K.CLIENT_MANDATAIRE), i.value(K.CLIENT_UTILISATEUR))
+        InterventionType.FPS, InterventionType.PL -> listOf(i.value(K.CLIENT_MANDATAIRE), i.value(K.CLIENT_UTILISATEUR))
             .map { it.replace('\n', ' ').trim() }.filter { it.isNotEmpty() }.joinToString(" – ")
             .ifEmpty { "Fiche d'intervention sans nom" }
         InterventionType.DOCUMENT -> listOf(i.value(DocKeys.CLIENT), i.value(DocKeys.SITE))
@@ -120,13 +134,14 @@ object Naming {
     }
 
     fun reference(i: Intervention): String = when (i.type) {
-        InterventionType.FPS -> i.value(K.NUMERO_COMMANDE)
+        InterventionType.FPS, InterventionType.PL -> i.value(K.NUMERO_COMMANDE)
         InterventionType.DOCUMENT -> i.value(DocKeys.REFERENCE)
     }.trim()
 
-    /** Nature du bon : fiche d'intervention, feuille du client à remplir (Mastra) ou document à signer. */
+    /** Nature du bon : fiche presse mobile ou poids lourds, feuille du client à remplir (Mastra) ou document à signer. */
     fun kindLabel(i: Intervention): String = when {
-        i.type == InterventionType.FPS -> "Fiche d'intervention"
+        i.type == InterventionType.FPS -> "Fiche presse mobile"
+        i.type == InterventionType.PL -> "Fiche poids lourds"
         i.template != null -> i.recognized ?: i.template.name
         else -> "Document à signer"
     }

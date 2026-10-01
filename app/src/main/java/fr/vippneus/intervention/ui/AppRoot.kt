@@ -114,7 +114,7 @@ private fun Screens(vm: AppViewModel, states: SaveableStateHolder) {
             when (screen) {
                 Screen.Home -> HomeScreen(vm)
                 Screen.Settings -> SettingsScreen(vm)
-                is Screen.Fps -> FpsFormScreen(vm, screen.id)
+                is Screen.Fps -> SheetFormScreen(vm, screen.id)
                 is Screen.Document -> DocumentScreen(vm, screen.id)
                 is Screen.Editor -> EditorScreen(vm, screen.id)
                 is Screen.Viewer -> ViewerScreen(vm, screen.id)

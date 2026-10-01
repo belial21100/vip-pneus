@@ -95,7 +95,7 @@ class NamingTest {
 
     @Test
     fun natureDuBon() {
-        assertEquals("Fiche d'intervention", Naming.kindLabel(fps()))
+        assertEquals("Fiche presse mobile", Naming.kindLabel(fps()))
         val doc = Intervention(id = "x", type = InterventionType.DOCUMENT, createdAt = 0L)
         assertEquals("Document à signer", Naming.kindLabel(doc))
         // Un bon de commande importé reste un document à signer

@@ -19,24 +19,23 @@ import java.util.Calendar
 
 /** Opérations de dessin et format de la page 1 d'une intervention. */
 object PageOps {
-    fun build(i: Intervention, m: TextMeasure): List<DrawOp> = when (i.type) {
-        InterventionType.FPS -> FpsLayout.build(i.values, i.signature, i.adjust, m) + OverlayLayout.build(i.overlays, m)
-        InterventionType.DOCUMENT ->
-            (i.template?.let { TemplateLayout.build(it, i.values, i.signature, i.adjust, m) } ?: emptyList()) +
-                OverlayLayout.build(i.overlays, m)
+    fun build(i: Intervention, m: TextMeasure): List<DrawOp> {
+        val sheet = i.type.sheet
+        val page = when {
+            sheet != null -> SheetLayout.build(sheet, i.values, i.signature, i.adjust, m)
+            else -> i.template?.let { TemplateLayout.build(it, i.values, i.signature, i.adjust, m) } ?: emptyList()
+        }
+        return page + OverlayLayout.build(i.overlays, m)
     }
 
-    /** Libellé d'un champ (fiche FPS ou document reconnu), pour l'éditeur. */
+    /** Libellé d'un champ (fiche intégrée ou document reconnu), pour l'éditeur. */
     fun fieldLabel(i: Intervention, key: String): String? =
-        FpsTemplate.fieldsByKey[key]?.label
+        i.type.sheet?.label(key)
             ?: i.template?.fields?.firstOrNull { it.key == key }?.label
             ?: i.template?.panel?.takeIf { it.key == key }?.title
-            ?: FpsTemplate.choices.firstOrNull { it.key == key }?.label
 
-    fun pageSize(i: Intervention): Pair<Float, Float> = when (i.type) {
-        InterventionType.FPS -> FpsTemplate.PAGE_W to FpsTemplate.PAGE_H
-        InterventionType.DOCUMENT -> (i.source?.pageWidth ?: PDRectangle.A4.width) to (i.source?.pageHeight ?: PDRectangle.A4.height)
-    }
+    fun pageSize(i: Intervention): Pair<Float, Float> = i.type.sheet?.let { it.pageW to it.pageH }
+        ?: ((i.source?.pageWidth ?: PDRectangle.A4.width) to (i.source?.pageHeight ?: PDRectangle.A4.height))
 }
 
 /**
@@ -95,10 +94,7 @@ class PdfExporter(private val context: Context) {
         val ops = PageOps.build(i, measure)
         val opened = mutableListOf<PDDocument>()
         try {
-            val doc = when (i.type) {
-                InterventionType.FPS -> buildFps(ops)
-                InterventionType.DOCUMENT -> buildDocument(i, dir, ops)
-            }
+            val doc = i.type.sheet?.let { buildSheet(it, ops) } ?: buildDocument(i, dir, ops)
             opened += doc
             val merger = PDFMergerUtility()
 
@@ -154,16 +150,26 @@ class PdfExporter(private val context: Context) {
         }
     }
 
-    private fun buildFps(ops: List<DrawOp>): PDDocument {
-        val doc = PDDocument()
+    /** Fiche intégrée : la fiche vierge (PDF, sinon image) et les saisies par-dessus. */
+    private fun buildSheet(sheet: Sheet, ops: List<DrawOp>): PDDocument {
+        val pdf = sheet.pdfAsset
+        val doc = if (pdf != null) context.assets.open(pdf).use { PDDocument.load(it) } else PDDocument()
         try {
-            val page = PDPage(PDRectangle(FpsTemplate.PAGE_W, FpsTemplate.PAGE_H))
+            if (pdf != null) {
+                val page = doc.getPage(0)
+                val font = loadFont(doc)
+                PDPageContentStream(doc, page, PDPageContentStream.AppendMode.APPEND, true, true).use { cs ->
+                    drawOps(cs, ops, PageMapper.of(page), font)
+                }
+                return doc
+            }
+            val page = PDPage(PDRectangle(sheet.pageW, sheet.pageH))
             doc.addPage(page)
-            val background = context.assets.open(FpsTemplate.BACKGROUND_ASSET).use { JPEGFactory.createFromStream(doc, it) }
+            val background = context.assets.open(sheet.imageAsset).use { JPEGFactory.createFromStream(doc, it) }
             val font = loadFont(doc)
             PDPageContentStream(doc, page).use { cs ->
-                cs.drawImage(background, 0f, 0f, FpsTemplate.PAGE_W, FpsTemplate.PAGE_H)
-                drawOps(cs, ops, PageMapper.plain(FpsTemplate.PAGE_W, FpsTemplate.PAGE_H), font)
+                cs.drawImage(background, 0f, 0f, sheet.pageW, sheet.pageH)
+                drawOps(cs, ops, PageMapper.plain(sheet.pageW, sheet.pageH), font)
             }
             return doc
         } catch (e: Exception) {

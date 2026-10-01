@@ -50,6 +50,7 @@ import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Draw
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.LocalShipping
 import androidx.compose.material.icons.filled.PostAdd
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
@@ -165,8 +166,8 @@ fun HomeScreen(vm: AppViewModel) {
         if (uri != null) vm.importClient(uri)
     }
     val onImport = { pickDocument.launch(arrayOf("application/pdf", "image/*")) }
-    val onBlank = {
-        val id = vm.createFps()
+    val onBlank = { type: InterventionType ->
+        val id = vm.createSheet(type)
         vm.navigate(Screen.Fps(id))
     }
     val onSettings = { vm.navigate(Screen.Settings) }
@@ -320,7 +321,7 @@ private fun SidePanel(
     filter: Filter,
     onFilter: (Filter) -> Unit,
     onImport: () -> Unit,
-    onBlank: () -> Unit,
+    onBlank: (InterventionType) -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier,
 ) {
@@ -352,7 +353,17 @@ private fun SidePanel(
             Spacer(Modifier.height(if (tight) 16.dp else 28.dp))
             ImportCard(onImport, Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
-            NewFicheCard(onBlank, Modifier.fillMaxWidth(), compact = tight)
+            NewFicheCard(
+                "Nouvelle fiche presse mobile",
+                "Conti, Mac2… avec le bon de commande joint",
+                Icons.Filled.PostAdd, { onBlank(InterventionType.FPS) }, Modifier.fillMaxWidth(), compact = tight,
+            )
+            Spacer(Modifier.height(if (tight) 8.dp else 12.dp))
+            NewFicheCard(
+                "Nouvelle fiche poids lourds",
+                "Dépannage, essieux, roues jumelées",
+                Icons.Filled.LocalShipping, { onBlank(InterventionType.PL) }, Modifier.fillMaxWidth(), compact = tight,
+            )
             Spacer(Modifier.height(if (tight) 16.dp else 32.dp))
             Overline("Suivi")
             Spacer(Modifier.height(10.dp))
@@ -371,7 +382,7 @@ private fun TopHeader(
     filter: Filter,
     onFilter: (Filter) -> Unit,
     onImport: () -> Unit,
-    onBlank: () -> Unit,
+    onBlank: (InterventionType) -> Unit,
     onSettings: () -> Unit,
 ) {
     val c = Vip.colors
@@ -399,7 +410,8 @@ private fun TopHeader(
         Row(Modifier.padding(end = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             ImportCard(onImport, Modifier.weight(1.25f))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                VipButton("Nouvelle fiche d'intervention", onBlank, Modifier.fillMaxWidth(), icon = Icons.Filled.PostAdd, tone = Tone.CHROME)
+                VipButton("Fiche presse mobile", { onBlank(InterventionType.FPS) }, Modifier.fillMaxWidth(), icon = Icons.Filled.PostAdd, tone = Tone.CHROME)
+                VipButton("Fiche poids lourds", { onBlank(InterventionType.PL) }, Modifier.fillMaxWidth(), icon = Icons.Filled.LocalShipping, tone = Tone.CHROME)
                 Kpis(counts, filter, onFilter, compact = true)
             }
         }
@@ -449,9 +461,16 @@ private fun ImportCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** Créer une fiche d'intervention (Conti, Mac2…), pré-remplie par le bon de commande joint. */
+/** Créer une fiche intégrée : presse mobile (Conti, Mac2…, pré-remplie par le bon de commande joint) ou poids lourds. */
 @Composable
-private fun NewFicheCard(onClick: () -> Unit, modifier: Modifier = Modifier, compact: Boolean = false) {
+private fun NewFicheCard(
+    title: String,
+    subtitle: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false,
+) {
     val c = Vip.colors
     Surface(
         onClick = onClick,
@@ -461,17 +480,12 @@ private fun NewFicheCard(onClick: () -> Unit, modifier: Modifier = Modifier, com
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
         modifier = modifier,
     ) {
-        Row(Modifier.padding(horizontal = 18.dp, vertical = if (compact) 12.dp else 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconBadge(Icons.Filled.PostAdd, background = c.accent.copy(alpha = 0.16f), tint = c.accent, size = if (compact) 44.dp else 52.dp)
+        Row(Modifier.padding(horizontal = 18.dp, vertical = if (compact) 10.dp else 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(icon, background = c.accent.copy(alpha = 0.16f), tint = c.accent, size = if (compact) 40.dp else 48.dp)
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text("Nouvelle fiche d'intervention", style = MaterialTheme.typography.titleMedium)
-                Text(
-                    if (compact) "Conti, Mac2… avec le bon de commande joint"
-                    else "Conti, Mac2… : joignez le bon de commande, la fiche se remplit toute seule",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = c.onChromeMuted,
-                )
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = c.onChromeMuted)
             }
         }
     }
@@ -660,7 +674,7 @@ private fun BonsList(
                     Icons.Filled.UploadFile,
                     "Aucun bon pour l'instant",
                     "Importez le document du client (feuille de tâche Mastra, bon de livraison) pour le remplir " +
-                        "ou le faire signer, ou créez une fiche d'intervention pour Conti et Mac2. Un PDF peut aussi " +
+                        "ou le faire signer, ou créez une fiche presse mobile (Conti, Mac2) ou poids lourds. Un PDF peut aussi " +
                         "s'ouvrir depuis la messagerie avec « Ouvrir avec » VIP Pneus.",
                 ) { StepsGuide(Modifier.padding(top = 16.dp)) }
             }
@@ -895,7 +909,7 @@ private fun StepsGuide(modifier: Modifier = Modifier) {
     val steps = listOf(
         Triple(
             Icons.Filled.UploadFile, "Importez ou créez",
-            "Feuille Mastra ou bon de livraison à importer ; fiche d'intervention pour Conti et Mac2, bon de commande joint.",
+            "Feuille Mastra ou bon de livraison à importer ; fiche presse mobile (Conti, Mac2) ou poids lourds.",
         ),
         Triple(Icons.Filled.Draw, "Complétez sur place", "Cases de la feuille, horamètre, serrage…, puis signature du client."),
         Triple(Icons.AutoMirrored.Filled.Send, "Envoyez à la compta", "Le PDF est nommé automatiquement et joint à l'e-mail."),
@@ -1128,7 +1142,7 @@ private fun CardMenu(i: Intervention, onSend: () -> Unit, onPreview: () -> Unit,
                 leadingIcon = { Icon(Icons.Filled.Visibility, null) },
                 onClick = { menu = false; onPreview() },
             )
-            if (i.type == InterventionType.FPS) {
+            if (i.type.isSheet) {
                 DropdownMenuItem(
                     text = { Text("Nouvelle fiche pour ce client") },
                     leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },

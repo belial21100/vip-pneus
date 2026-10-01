@@ -57,6 +57,7 @@ import java.util.UUID
 sealed interface Screen {
     data object Home : Screen
     data object Settings : Screen
+    /** Fiche intégrée : presse mobile ou poids lourds. */
     data class Fps(val id: String) : Screen
     data class Document(val id: String) : Screen
     data class Editor(val id: String) : Screen
@@ -140,12 +141,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openIntervention(i: Intervention) {
-        navigate(if (i.type == InterventionType.FPS) Screen.Fps(i.id) else Screen.Document(i.id))
+        navigate(if (i.type.isSheet) Screen.Fps(i.id) else Screen.Document(i.id))
     }
 
     /** Depuis l'aperçu du PDF : retour à la saisie du bon, pour compléter ce qui manque. */
     fun editIntervention(i: Intervention) {
-        val edit = if (i.type == InterventionType.FPS) Screen.Fps(i.id) else Screen.Document(i.id)
+        val edit = if (i.type.isSheet) Screen.Fps(i.id) else Screen.Document(i.id)
         if (backStack.size > 1 && backStack.last() is Screen.Viewer) backStack.removeAt(backStack.lastIndex)
         if (backStack.last() != edit) backStack.add(edit)
     }
@@ -242,13 +243,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- création
 
-    fun createFps(): String {
+    fun createFps(): String = createSheet(InterventionType.FPS)
+
+    /** Nouvelle fiche intégrée (presse mobile ou poids lourds), datée du jour, au nom du technicien. */
+    fun createSheet(type: InterventionType): String {
         val s = _settings.value
         val values = buildMap {
             put(K.DATE, Naming.today())
             if (s.technicien.isNotBlank()) put(K.MONTEUR, s.technicien.trim())
         }
-        val i = Intervention(id = repo.newId(), type = InterventionType.FPS, createdAt = System.currentTimeMillis(), values = values)
+        val i = Intervention(id = repo.newId(), type = type, createdAt = System.currentTimeMillis(), values = values)
         add(i)
         return i.id
     }
@@ -261,10 +265,11 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
                 K.CLIENT_MANDATAIRE, K.MANDATAIRE_ADRESSE, K.MANDATAIRE_CP, K.MONTEUR,
                 K.CLIENT_UTILISATEUR, K.UTILISATEUR_ADRESSE, K.UTILISATEUR_CP,
             )
+            InterventionType.PL -> listOf(K.CLIENT_MANDATAIRE, K.CLIENT_UTILISATEUR, K.UTILISATEUR_ADRESSE, K.MONTEUR)
             InterventionType.DOCUMENT -> return message("Seules les fiches d'intervention peuvent être dupliquées")
         }
         val values = src.values.filterKeys { it in keep } + (K.DATE to Naming.today())
-        val i = Intervention(id = repo.newId(), type = InterventionType.FPS, createdAt = System.currentTimeMillis(), values = values)
+        val i = Intervention(id = repo.newId(), type = src.type, createdAt = System.currentTimeMillis(), values = values)
         add(i)
         navigate(Screen.Fps(i.id))
     }
@@ -440,7 +445,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------------------------------------------------------- pièces jointes
 
     /**
-     * Ajoute un document après la page 1. Pour une fiche FPS, un bon de commande reconnu
+     * Ajoute un document après la page 1. Pour une fiche presse mobile, un bon de commande reconnu
      * complète aussi les champs encore vides de la fiche.
      */
     fun addAttachment(id: String, uri: Uri) {

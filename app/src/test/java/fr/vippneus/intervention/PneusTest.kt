@@ -9,7 +9,7 @@ import fr.vippneus.intervention.data.Suggestions
 import fr.vippneus.intervention.importer.ClientDocs
 import fr.vippneus.intervention.importer.TireLine
 import fr.vippneus.intervention.pdf.CrossOp
-import fr.vippneus.intervention.pdf.FpsLayout
+import fr.vippneus.intervention.pdf.SheetLayout
 import fr.vippneus.intervention.pdf.FpsTemplate
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import fr.vippneus.intervention.pdf.TextMeasure
@@ -48,7 +48,8 @@ class PneusTest {
 
     @Test
     fun ligneAjoutee_essieuEtCroixSurSaLigne() {
-        val ops = FpsLayout.build(
+        val ops = SheetLayout.build(
+            FpsTemplate,
             mapOf(
                 K.essieu("sup1") to "AR int.",
                 K.pneu("sup1", "dimensions") to "315/80 R22.5",

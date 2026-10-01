@@ -2,9 +2,21 @@ package fr.vippneus.intervention.data
 
 import kotlinx.serialization.Serializable
 
-/** Deux façons de produire le bon : la fiche FPS intégrée, ou la 1re page d'un PDF client. */
+/**
+ * Façons de produire le bon : une fiche intégrée à l'application (presse mobile, poids lourds),
+ * ou la 1re page d'un PDF client.
+ */
 @Serializable
-enum class InterventionType { FPS, DOCUMENT }
+enum class InterventionType {
+    /** Fiche d'intervention presse mobile (reprise de la fiche FPS). */
+    FPS,
+    /** Fiche d'intervention poids lourds de VIP (dépannage, plusieurs essieux, roues jumelées). */
+    PL,
+    DOCUMENT;
+
+    /** Fiche intégrée : remplie dans l'application, sur la fiche vierge. */
+    val isSheet: Boolean get() = this != DOCUMENT
+}
 
 /**
  * Signature manuscrite, conservée en vectoriel (traits) pour un rendu net dans le PDF.
@@ -141,9 +153,9 @@ data class Intervention(
     val type: InterventionType,
     val createdAt: Long,
     val updatedAt: Long = createdAt,
-    /** Valeurs saisies (clés : [fr.vippneus.intervention.pdf.FpsTemplate] ou [DocKeys]). */
+    /** Valeurs saisies (clés : [fr.vippneus.intervention.pdf.FpsTemplate], [fr.vippneus.intervention.pdf.PlKeys] ou [DocKeys]). */
     val values: Map<String, String> = emptyMap(),
-    /** Signature du client sur la fiche FPS. */
+    /** Signature du client sur la fiche intégrée. */
     val signature: SignatureData? = null,
     val adjust: Map<String, FieldAdjust> = emptyMap(),
     val overlays: List<Overlay> = emptyList(),

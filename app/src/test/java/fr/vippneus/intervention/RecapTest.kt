@@ -47,7 +47,7 @@ class RecapTest {
         assertEquals(3, lines.size)
         val row = lines[1]
         // Cellule avec « ; » et guillemets : entre guillemets, guillemets doublés
-        assertTrue(row, row.startsWith("03/09/2026;Fiche d'intervention;LOC TEST;\"Entrepôt \"\"Nord\"\"; quai 2\";02000;Laon;1234567;"))
+        assertTrue(row, row.startsWith("03/09/2026;Fiche presse mobile;LOC TEST;\"Entrepôt \"\"Nord\"\"; quai 2\";02000;Laon;1234567;"))
         assertTrue(row, row.contains("03-09-2026 CE.pdf"))
         assertTrue(row, row.contains(";Envoyé;"))
         // Rien ne manque

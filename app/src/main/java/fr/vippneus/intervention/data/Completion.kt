@@ -2,6 +2,8 @@ package fr.vippneus.intervention.data
 
 import fr.vippneus.intervention.pdf.FpsTemplate
 import fr.vippneus.intervention.pdf.FpsTemplate.K
+import fr.vippneus.intervention.pdf.PlKeys
+import fr.vippneus.intervention.pdf.PlTemplate
 
 /** Élément attendu sur le bon avant l'envoi à la comptabilité. */
 data class Todo(
@@ -16,7 +18,8 @@ data class Todo(
 /**
  * Ce qu'il reste à compléter sur un bon : affiché en tête du formulaire, dans la barre d'envoi,
  * sur la liste des bons et vérifié avant l'envoi.
- * - fiche FPS : les rubriques de la fiche ;
+ * - fiche presse mobile : les rubriques de la fiche ;
+ * - fiche poids lourds : n°, client, lieu, véhicule, kilométrage, travail effectué, signature ;
  * - feuille de tâche Mastra : les cases que remplit le technicien, et la signature ;
  * - autre document (bon de livraison…) : seulement la signature du client.
  */
@@ -25,6 +28,7 @@ object Completion {
 
     fun todos(i: Intervention): List<Todo> = when (i.type) {
         InterventionType.FPS -> fps(i)
+        InterventionType.PL -> pl(i)
         InterventionType.DOCUMENT -> document(i)
     }
 
@@ -41,7 +45,7 @@ object Completion {
         key == K.MARQUE -> listOf(K.MARQUE, K.TYPE, K.SERIE)
         key == K.SERRAGE_AV -> listOf(K.SERRAGE_AV, K.SERRAGE_AR)
         key == K.pneu("av", "dimensions") -> listOf(K.pneu("av", "dimensions"), K.pneu("av", "quantite"))
-        key.startsWith("prest.") -> emptyList()
+        key.startsWith("prest.") || key == PL_TRAVAIL -> emptyList()
         else -> listOf(key)
     }
 
@@ -69,6 +73,23 @@ object Completion {
             K.SERRAGE_AV, "Serrage des roues",
             filled(i, K.SERRAGE_AV, K.SERRAGE_AR, K.SERRAGE_AV_REMARQUE, K.SERRAGE_AR_REMARQUE),
             "Couple AV ou AR en Nm, ou une remarque",
+        ),
+        Todo(SIGNATURE, "Signature du client", signed(i), "À faire signer en fin d'intervention"),
+    )
+
+    /** Rien de fait sur la fiche poids lourds tant qu'aucun pneu, fourniture, service ni roue n'est noté. */
+    const val PL_TRAVAIL = "pl.travail"
+
+    private fun pl(i: Intervention) = listOf(
+        Todo(K.NUMERO_COMMANDE, "N°", filled(i, K.NUMERO_COMMANDE), "Numéro du bon ou de la commande"),
+        Todo(K.CLIENT_MANDATAIRE, "Client", filled(i, K.CLIENT_MANDATAIRE, K.CLIENT_UTILISATEUR), "Donneur d'ordre ou client"),
+        Todo(PlKeys.LIEU, "Lieu du dépannage", filled(i, PlKeys.LIEU), "Où se trouve le véhicule"),
+        Todo(K.MARQUE, "Véhicule", filled(i, PlKeys.VEHICULE, K.MARQUE, K.TYPE, K.SERIE, K.PARC), "Marque, type, immatriculation ou n° de parc"),
+        Todo(K.HORAMETRE, "Km / heure", filled(i, K.HORAMETRE), "Kilométrage ou heures du véhicule"),
+        Todo(
+            PL_TRAVAIL, "Travail effectué",
+            PlTemplate.workKeys.any { filled(i, it) } || PlTemplate.checkedWheels(i.values).isNotEmpty(),
+            "Roue touchée sur le schéma, pneu monté ou démonté, fourniture ou service",
         ),
         Todo(SIGNATURE, "Signature du client", signed(i), "À faire signer en fin d'intervention"),
     )

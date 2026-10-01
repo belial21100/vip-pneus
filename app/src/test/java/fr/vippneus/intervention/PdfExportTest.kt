@@ -16,6 +16,7 @@ import fr.vippneus.intervention.data.FieldAdjust
 import fr.vippneus.intervention.data.Intervention
 import fr.vippneus.intervention.data.InterventionType
 import fr.vippneus.intervention.data.Overlay
+import fr.vippneus.intervention.data.PlTyres
 import fr.vippneus.intervention.data.OverlayKind
 import fr.vippneus.intervention.data.SignatureData
 import fr.vippneus.intervention.data.SourceDoc
@@ -23,6 +24,8 @@ import fr.vippneus.intervention.pdf.FpsTemplate
 import fr.vippneus.intervention.pdf.FpsTemplate.K
 import fr.vippneus.intervention.pdf.PdfExporter
 import fr.vippneus.intervention.pdf.PdfPages
+import fr.vippneus.intervention.pdf.PlKeys
+import fr.vippneus.intervention.pdf.PlTemplate
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -193,6 +196,54 @@ class PdfExportTest {
             assertEquals(1, doc.numberOfPages)
             val text = PDFTextStripper().getText(doc)
             for (t in listOf("AR int.", "Essieu 3", "385/65 R22.5", "Continental", "Roue de secours")) assertTrue(t, text.contains(t))
+        }
+    }
+
+    /** Fiche poids lourds : la fiche vierge de VIP en page 1, saisies et roues cochées par-dessus. */
+    @Test
+    fun fichePoidsLourds() {
+        val dir = File(out, "pl").apply { deleteRecursively(); mkdirs() }
+        var i = Intervention(
+            id = "test-pl",
+            type = InterventionType.PL,
+            createdAt = 0L,
+            values = mapOf(
+                K.DATE to "01/10/26", K.NUMERO_COMMANDE to "4521", K.MONTEUR to "Chris.E",
+                K.CLIENT_MANDATAIRE to "Transports Test", K.CLIENT_UTILISATEUR to "Logistique Exemple",
+                K.UTILISATEUR_ADRESSE to "12 rue des Essais, 51100 Reims", PlKeys.LIEU to "A26 sortie 13, aire de Test",
+                PlKeys.KM_DEPART to "125", PlKeys.KM_ARRIVEE to "158", PlKeys.HEURE_DEPART to "07:45", PlKeys.HEURE_ARRIVEE to "08:20",
+                PlKeys.VEHICULE to "Tracteur", K.MARQUE to "Renault Trucks", K.TYPE to "T 480", K.SERIE to "AB-123-CD",
+                K.PARC to "PL-12", K.HORAMETRE to "452 300 km",
+                PlKeys.pneu("dimensions") to "315/80 R22.5", PlKeys.pneu("avar") to "AR", PlKeys.pneu("marque") to "Michelin",
+                PlKeys.pneu("type") to "X Multi D", PlKeys.pneu("nro") to "N", PlKeys.pneu("qte") to "2",
+                PlKeys.fourniture("valves", "dimensions") to "TR 571", PlKeys.fourniture("valves", "qte") to "2",
+                PlKeys.service("demMont") to "2", PlKeys.service("equilibrage") to "2", PlKeys.service("deplacement") to "1",
+                K.OBSERVATIONS to "Pneu AR D ext éclaté, jumelé intérieur usé : remplacés tous les deux.",
+                K.SIGNATAIRE to "M. Exemple, chauffeur",
+            ),
+            signature = signature(),
+        )
+        fun tyre(dims: String, brand: String, mat: String, usure: String) =
+            mapOf("dimensions" to dims, "marque" to brand, "matricule" to mat, "usure" to usure)
+        for ((pos, n) in listOf("2 AR D ext" to 1, "2 AR D int" to 2)) {
+            i = PlTyres.save(
+                i, pos, pos,
+                tyre("315/80 R22.5", "Michelin", "MX20${n}", "16"), null,
+                tyre("315/80 R22.5", "Bridgestone", "BS88$n", "2"), null,
+            )!!
+        }
+        i = PlTyres.save(i, "1 ESS G ext", "1 ESS G ext", tyre("", "", "", ""), null, tyre("", "", "", ""), null)!!
+
+        val result = File(out, "fiche-poids-lourds.pdf")
+        PdfExporter(context).export(i, dir, result, "Fiche poids lourds", "Chris.E")
+        PDDocument.load(result).use { doc ->
+            assertEquals(1, doc.numberOfPages)
+            assertEquals(PlTemplate.pageW, doc.getPage(0).mediaBox.width, 0.5f)
+            assertEquals(PlTemplate.pageH, doc.getPage(0).mediaBox.height, 0.5f)
+            val text = PDFTextStripper().getText(doc)
+            for (t in listOf("FICHE D'INTERVENTION", "Transports Test", "315/80 R22.5", "2 AR D ext", "A26 sortie 13", "AB-123-CD", "TR 571")) {
+                assertTrue(t, text.contains(t))
+            }
         }
     }
 

@@ -9,35 +9,20 @@ package fr.vippneus.intervention.pdf
  * reprennent celles utilisées sur les exemples (texte réduit automatiquement s'il est trop long).
  * Le tableau « Fournitures » a six lignes : AV, AR, puis les autres essieux et roues intérieures.
  */
-object FpsTemplate {
+object FpsTemplate : Sheet {
     const val BACKGROUND_ASSET = "templates/fiche_presse_mobile.jpg"
     const val PAGE_W = 595.28f
     const val PAGE_H = 841.89f
     private const val IMG_W = 1449f
     private const val IMG_H = 2048f
 
+    override val pageW = PAGE_W
+    override val pageH = PAGE_H
+    override val imageAsset = BACKGROUND_ASSET
+
     private fun px(x: Number) = x.toFloat() * PAGE_W / IMG_W
     private fun py(y: Number) = y.toFloat() * PAGE_H / IMG_H
     private fun box(x0: Number, y0: Number, x1: Number, y1: Number) = Box(px(x0), py(y0), px(x1), py(y1))
-
-    enum class HAlign { START, CENTER }
-
-    class Field(
-        val key: String,
-        val label: String,
-        val box: Box,
-        val fontSize: Float,
-        val align: HAlign = HAlign.START,
-        val maxLines: Int = 1,
-        val minFontSize: Float = 7f,
-        /** Si renseigné : 1re ligne centrée sur cette ordonnée (alignée sur l'étiquette imprimée). */
-        val firstLineY: Float? = null,
-    )
-
-    class Option(val value: String, val label: String, val cx: Float, val cy: Float)
-
-    /** Cases à cocher « Oui / Non » : une croix est tracée dans la case choisie. */
-    class Choice(val key: String, val label: String, val options: List<Option>)
 
     object K {
         const val CLIENT_MANDATAIRE = "clientMandataire"
@@ -134,7 +119,7 @@ object FpsTemplate {
         Triple("autres", "Autres", 1192 to 1366),
     )
 
-    val fields: List<Field> = buildList {
+    override val fields: List<Field> = buildList {
         // En-tête : donneur d'ordre et commande
         add(Field(K.CLIENT_MANDATAIRE, "Client mandataire", box(915, 208, 1395, 244), 16f))
         add(Field(K.MANDATAIRE_ADRESSE, "Adresse / Ville (mandataire)", box(878, 245, 1395, 281), 14f))
@@ -217,9 +202,9 @@ object FpsTemplate {
         )
     }
 
-    val fieldsByKey: Map<String, Field> = fields.associateBy { it.key }
+    override val fieldsByKey: Map<String, Field> = fields.associateBy { it.key }
 
-    val choices: List<Choice> = pneuRows.map { row ->
+    override val choices: List<Choice> = pneuRows.map { row ->
         // Cases « Oui ☐  Non ☐ » de la colonne « Fournis », centrées sur la ligne
         val cy = py((row.y0 + row.y1 + 1) / 2f)
         Choice(K.fourni(row.key), "Pneus ${row.name} fournis", listOf(Option("oui", "Oui", px(329), cy), Option("non", "Non", px(417), cy)))
@@ -230,9 +215,7 @@ object FpsTemplate {
         ),
     )
 
-    /** Demi-côté de la croix tracée dans une case (points). */
-    val crossHalf: Float = px(9)
+    override val crossHalf: Float = px(9)
 
-    /** Zone de la signature du client. */
-    val signatureBox: Box = box(800, 1872, 1385, 2006)
+    override val signatureBox: Box = box(800, 1872, 1385, 2006)
 }

@@ -328,7 +328,7 @@ private fun DocumentForm(
                 title = if (order != null) "$order : document à signer" else "Écrivez directement sur la page",
                 text = if (order != null) {
                     "Seule la signature du client est exigée. S'il faut une fiche d'intervention, créez-la avec " +
-                        "« Nouvelle fiche d'intervention » et joignez-y ce document : elle se remplira toute seule."
+                        "« Nouvelle fiche presse mobile » et joignez-y ce document : elle se remplira toute seule."
                 } else {
                     "Seule la signature du client est exigée. Choisissez Texte, Date, Croix ou Signature " +
                         "au-dessus de la page, puis touchez l'endroit voulu ; glissez un élément pour le déplacer."
