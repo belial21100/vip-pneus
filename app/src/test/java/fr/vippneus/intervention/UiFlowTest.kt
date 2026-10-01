@@ -17,6 +17,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -327,6 +328,27 @@ class UiFlowTest {
         assertEquals("AR int.", current().value(K.essieu("sup1")))
         assertTrue(Completion.missing(current()).none { it.key == K.essieu("sup1") })
 
+        // Prestations : un appui sur une case ajoute 1
+        compose.onNodeWithContentDescription("Dépose / repose roues – 8 pouces").performScrollTo().performClick()
+        idle(4)
+        compose.onNodeWithContentDescription("Dépose / repose roues – 8 pouces").performClick()
+        idle(4)
+        assertEquals("2", current().value(K.prestation("depose", "8")))
+        compose.onNodeWithContentDescription("Retirer 1 Dépose / repose roues – 8 pouces").performClick()
+        idle(4)
+        assertEquals("1", current().value(K.prestation("depose", "8")))
+        // Quantité des pneus AV avec « + », marque d'un appui
+        compose.onAllNodesWithContentDescription("Ajouter 1 Quantité")[0].performScrollTo().performClick()
+        idle(4)
+        assertEquals("3", current().value(K.pneu("av", "quantite")))
+        // Les boutons sont dans une rangée qui défile : on amène d'abord le bloc AV à l'écran
+        compose.onAllNodes(hasText("Profil") and hasSetTextAction())[0].performScrollTo()
+        idle(4)
+        compose.onAllNodesWithText("Michelin")[0].performClick()
+        idle(4)
+        assertEquals("Michelin", current().value(K.pneu("av", "marque")))
+        snap("02h-fiche-saisie-rapide")
+
         // Une ligne de plus, puis retirée
         compose.onNodeWithText("Ajouter un essieu ou des roues intérieures").performScrollTo().performClick()
         idle()
@@ -362,17 +384,26 @@ class UiFlowTest {
         snap("16b-fiche-pl-schema")
         compose.onNodeWithContentDescription("Roue 2 AR D ext").performScrollTo().performClick()
         idle(4)
-        // Dans la fenêtre de la roue : pneu monté, puis pneu démonté
-        fun dialogField(label: String, n: Int) = compose.onAllNodes(hasText(label) and hasSetTextAction() and hasAnyAncestor(isDialog()))[n]
-        dialogField("Dimensions", 0).performTextInput("315/80 R22.5")
-        dialogField("Marque", 0).performTextInput("Michelin")
-        dialogField("Usure", 1).performTextInput("3")
-        compose.onNodeWithText("Même dimension et marque").performClick()
+        // Dans la fenêtre de la roue : dimensions au pavé, marque et usure en un appui
+        fun inDialog(text: String) = compose.onAllNodes(hasText(text) and hasClickAction() and hasAnyAncestor(isDialog()))
+        inDialog("Dimensions")[0].performClick()
+        idle(4)
+        for (k in listOf("3", "1", "5", "/", "8", "0", "R", "2", "2", ".", "5")) compose.onNodeWithContentDescription("Touche $k").performClick()
+        snap("16c-fiche-pl-pave-dimensions")
+        compose.onNodeWithText("OK").performClick()
+        idle(4)
+        inDialog("Michelin")[0].performClick()
         idle(4)
         snap("16c-fiche-pl-roue")
+        // Usure du pneu démonté : 2e rangée de boutons « Usure (mm) »
+        inDialog("3")[1].performScrollTo().performClick()
+        compose.onNodeWithText("Même dimension et marque").performScrollTo().performClick()
+        idle(4)
         compose.onNodeWithText("Valider").performClick()
         idle(4)
         assertEquals("2 AR D ext", current().value(PlKeys.tyre(TyreTable.MONTES, 1, "position")))
+        assertEquals("315/80 R22.5", current().value(PlKeys.tyre(TyreTable.MONTES, 1, "dimensions")))
+        assertEquals("Michelin", current().value(PlKeys.tyre(TyreTable.MONTES, 1, "marque")))
         assertEquals("315/80 R22.5", current().value(PlKeys.tyre(TyreTable.DEMONTES, 1, "dimensions")))
         assertEquals("3", current().value(PlKeys.tyre(TyreTable.DEMONTES, 1, "usure")))
         assertEquals("Michelin", current().value(PlKeys.tyre(TyreTable.DEMONTES, 1, "marque")))
@@ -387,6 +418,37 @@ class UiFlowTest {
         idle(10)
         assertEquals(setOf("2 AR D ext", "1 ESS G ext"), PlTyres.usedPositions(current()))
         snap("16e-fiche-pl-roues-cochees")
+
+        // Plusieurs roues d'un coup : le nom de l'essieu « 1 AR » sélectionne ses 4 roues
+        compose.onNodeWithContentDescription("Essieu 1 AR").performScrollTo().performClick()
+        idle(4)
+        snap("16f-fiche-pl-selection")
+        compose.onNodeWithText("Saisir les pneus").performClick()
+        idle(4)
+        // Dimension la plus utilisée proposée d'un appui
+        inDialog("315/80 R22.5")[0].performScrollTo().performClick()
+        idle(4)
+        snap("16g-fiche-pl-plusieurs-roues")
+        compose.onNodeWithText("Valider").performClick()
+        idle(10)
+        val axle = listOf("1 AR G ext", "1 AR G int", "1 AR D int", "1 AR D ext")
+        for (p in axle) {
+            val row = PlTyres.find(current(), TyreTable.MONTES, p)
+            assertTrue(p, row != null)
+            assertEquals(p, "315/80 R22.5", current().value(PlKeys.tyre(TyreTable.MONTES, row!!, "dimensions")))
+        }
+        assertEquals(5, PlTyres.filledRows(current(), TyreTable.MONTES).size)
+        snap("16h-fiche-pl-essieu-saisi")
+
+        // Services : un appui sur le libellé ajoute 1, « + » aussi
+        compose.onNodeWithText("Dém./mont.").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Ajouter 1 Dém./mont.").performClick()
+        idle(4)
+        assertEquals("2", current().value(PlKeys.service("demMont")))
+        compose.onNodeWithContentDescription("Retirer 1 Dém./mont.").performClick()
+        idle(4)
+        assertEquals("1", current().value(PlKeys.service("demMont")))
+        snap("16i-fiche-pl-services")
     }
 
     @Test

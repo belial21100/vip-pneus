@@ -45,7 +45,7 @@ object PlTyres {
 
     /**
      * Enregistre la saisie d'une roue (fenêtre du schéma) : pneu monté et pneu démonté.
-     * Un pneu sans aucune information retire sa ligne ; sinon il va sur sa ligne ([montedRow], [dismountedRow])
+     * Un pneu sans aucune information retire sa ligne ; sinon il va sur sa ligne ([mountedRow], [dismountedRow])
      * ou sur la première ligne libre. Null si un tableau est déjà plein.
      */
     fun save(
@@ -72,6 +72,34 @@ object PlTyres {
         PlTemplate.wheel(position)?.let { values = values + (PlKeys.wheel(it.position) to "x") }
         return cur.copy(values = values)
     }
+
+    /**
+     * Même saisie pour plusieurs roues (sélection sur le schéma) : chaque roue est cochée, et les cases
+     * remplies remplacent les siennes ; une case laissée vide garde ce qui était déjà saisi (matricule…).
+     * Null si un tableau est plein (rien n'est alors enregistré).
+     */
+    fun saveMany(i: Intervention, positions: List<String>, mounted: Map<String, String>, dismounted: Map<String, String>): Intervention? {
+        var cur = i
+        for (p in positions) {
+            val mountedRow = find(cur, TyreTable.MONTES, p)
+            val dismountedRow = find(cur, TyreTable.DEMONTES, p)
+            fun merge(table: TyreTable, row: Int?, typed: Map<String, String>) = infoColumns.associateWith { col ->
+                typed[col]?.trim()?.takeIf { it.isNotEmpty() } ?: row?.let { cur.value(key(table, it, col)) }.orEmpty()
+            }
+            cur = save(
+                cur, p, p,
+                merge(TyreTable.MONTES, mountedRow, mounted), mountedRow,
+                merge(TyreTable.DEMONTES, dismountedRow, dismounted), dismountedRow,
+            ) ?: return null
+        }
+        return cur
+    }
+
+    /** Dernier pneu saisi sur une autre roue que [current] (« Même pneu que la roue précédente »). */
+    fun previous(i: Intervention, table: TyreTable, current: String): Map<String, String>? =
+        filledRows(i, table)
+            .lastOrNull { PlTemplate.samePosition(position(i, table, it)) != PlTemplate.samePosition(current) }
+            ?.let { info(i, table, it) }
 
     /** Retire une roue : décochée, ses pneus montés et démontés effacés. */
     fun remove(i: Intervention, position: String): Intervention {

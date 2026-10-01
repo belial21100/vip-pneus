@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Assignment
@@ -32,7 +31,6 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.TireRepair
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -45,13 +43,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import fr.vippneus.intervention.data.Completion
 import fr.vippneus.intervention.data.Intervention
@@ -105,6 +100,33 @@ internal fun Form.Field(
         focusRequester = nav.focus(key),
         missing = key in missing,
     )
+}
+
+/** Dimensions : pavé des dimensions (et les plus utilisées) au lieu du clavier. */
+@Composable
+internal fun Form.Dimension(key: String, label: String, modifier: Modifier = Modifier) {
+    DimensionField(
+        label = label,
+        value = value(key),
+        onValueChange = { set(key, it) },
+        frequent = Suggestions.top(suggestions, key, max = 8),
+        modifier = modifier,
+        auto = i.isAuto(key),
+        missing = key in missing,
+        focusRequester = nav.focus(key),
+    )
+}
+
+/** Boutons des valeurs les plus utilisées, tant que le champ est vide. */
+@Composable
+internal fun Form.Picks(key: String, label: String) {
+    if (value(key).isBlank()) QuickPicks(label, Suggestions.top(suggestions, key), "", { set(key, it) })
+}
+
+/** Quantité avec − et +. */
+@Composable
+internal fun Form.Stepper(key: String, label: String, modifier: Modifier = Modifier) {
+    LabeledStepper(label, value(key), { set(key, it) }, modifier, auto = i.isAuto(key), focusRequester = nav.focus(key))
 }
 
 /** Sommaire de la fiche (identifiant de section -> libellé). */
@@ -381,7 +403,7 @@ private fun FpsForm(form: Form, todos: List<Todo>, onJump: (Todo) -> Unit, onSig
 
         SectionCard(
             "Prestations", nav.anchor("prestations"), icon = Icons.Filled.Handyman,
-            subtitle = "Quantités par taille de jante", trailing = status("prestations"),
+            subtitle = "Quantités par taille de jante : un appui ajoute 1, appui long pour taper", trailing = status("prestations"),
         ) {
             PrestationsGrid(form)
             SubHeader("Déplacement")
@@ -479,22 +501,16 @@ private fun CopyButton(text: String, onClick: () -> Unit) =
 private fun PneuBlock(form: Form, row: String, title: String) {
     val key = K.fourni(row)
     YesNo(title, form.value(key).ifEmpty { null }, { form.set(key, it.orEmpty()) })
-    val cols = FpsTemplate.pneuColumns
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        cols.take(3).forEach { (col, label, _) ->
-            form.Field(
-                K.pneu(row, col), label, Modifier.weight(1f),
-                caps = if (col == "dimensions") KeyboardCapitalization.None else KeyboardCapitalization.Words,
-            )
-        }
+        form.Dimension(K.pneu(row, "dimensions"), "Dimensions", Modifier.weight(1f))
+        form.Field(K.pneu(row, "marque"), "Marque", Modifier.weight(1f), caps = KeyboardCapitalization.Words)
+        form.Field(K.pneu(row, "profil"), "Profil", Modifier.weight(1f), caps = KeyboardCapitalization.Words)
     }
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        cols.drop(3).forEach { (col, label, _) ->
-            form.Field(
-                K.pneu(row, col), label, Modifier.weight(1f),
-                keyboard = if (col == "quantite") KeyboardType.Number else KeyboardType.Text,
-            )
-        }
+    form.Picks(K.pneu(row, "dimensions"), "Dimensions")
+    form.Picks(K.pneu(row, "marque"), "Marque")
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
+        form.Field(K.pneu(row, "type"), "Type", Modifier.weight(1f), caps = KeyboardCapitalization.Words)
+        form.Stepper(K.pneu(row, "quantite"), "Quantité", Modifier.weight(1f))
         Spacer(Modifier.weight(1f))
     }
 }
@@ -519,22 +535,15 @@ private fun PrestationsGrid(form: Form) {
         FpsTemplate.prestationRows.forEach { (row, rowLabel, _) ->
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(rowLabel, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.width(labelWidth))
-                FpsTemplate.prestationColumns.forEach { (col, _, _) ->
+                FpsTemplate.prestationColumns.forEach { (col, colLabel, _) ->
                     val key = K.prestation(row, col)
-                    OutlinedTextField(
+                    CounterCell(
                         value = form.value(key),
-                        onValueChange = { form.set(key, it) },
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.titleLarge.copy(textAlign = TextAlign.Center, fontSize = 20.sp),
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = if (col == "autres") KeyboardType.Text else KeyboardType.Number,
-                            imeAction = ImeAction.Next,
-                        ),
-                        shape = MaterialTheme.shapes.small,
-                        colors = vipFieldColors(form.i.isAuto(key)),
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(form.nav.focus(key)),
+                        onChange = { form.set(key, it) },
+                        modifier = Modifier.weight(1f),
+                        description = "$rowLabel – $colLabel",
+                        auto = form.i.isAuto(key),
+                        focusRequester = form.nav.focus(key),
                     )
                 }
             }

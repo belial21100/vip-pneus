@@ -28,8 +28,8 @@ android {
         applicationId = "fr.vippneus.intervention"
         minSdk = 26
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.10.0"
+        versionCode = 13
+        versionName = "1.11.0"
     }
 
     signingConfigs {

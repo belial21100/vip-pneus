@@ -10,6 +10,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -68,9 +69,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -612,8 +615,17 @@ fun VipField(
     error: String? = null,
     /** Champ attendu avant l'envoi : « À compléter » tant qu'il est vide. */
     missing: Boolean = false,
+    /** Champ qui se remplit sans le clavier (pavé des dimensions…) : un appui appelle [onClick]. */
+    onClick: (() -> Unit)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
+    val interaction = remember { MutableInteractionSource() }
+    if (onClick != null) {
+        val click by rememberUpdatedState(onClick)
+        LaunchedEffect(interaction) {
+            interaction.interactions.collect { if (it is PressInteraction.Release) click() }
+        }
+    }
     val toFill = missing && error == null && value.isBlank()
     val sparkle: @Composable () -> Unit = {
         Icon(
@@ -667,6 +679,8 @@ fun VipField(
                 else -> null
             },
             isError = error != null,
+            readOnly = onClick != null,
+            interactionSource = interaction,
             shape = MaterialTheme.shapes.small,
             colors = vipFieldColors(auto),
             textStyle = MaterialTheme.typography.bodyLarge,

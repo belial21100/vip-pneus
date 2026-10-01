@@ -62,14 +62,26 @@ Dans tous les cas, la date du jour et le nom du technicien sont remplis d'office
    dimension et marque » recopie le monté) ; sans pneu, la roue est seulement cochée
    (réparation, contrôle…). « Retirer » efface la roue. Huit pneus montés et huit démontés au plus,
    comme sur la fiche papier.
-4. **Faire signer** le client au doigt ou au stylet (son nom se saisit dans la même fenêtre).
-5. Au besoin, écrire sur la page (ou **Ajuster** la fiche) : déplacer un texte, changer sa
+4. **Saisie rapide**, sans le clavier :
+   - **Dimensions** : un appui sur le champ ouvre le **pavé des dimensions** (chiffres, « / », « R »,
+     « x », « - »…, avec les dimensions les plus utilisées) ; « Clavier complet » reste possible.
+   - **Dimensions et marques les plus utilisées** en boutons sous les champs vides (marques courantes
+     proposées dès la première fiche) ; **usure** de 1 à 20 mm en un appui.
+   - **Quantités** avec **−** et **+** ; un appui sur le nom d'un service ou d'une fourniture ajoute 1 ;
+     tableau des prestations : un appui sur une case ajoute 1, « − » dans le coin retire 1, appui long
+     pour taper.
+   - **Plusieurs roues d'un coup** (fiche poids lourds) : « Plusieurs roues », ou un appui sur le nom
+     d'un essieu pour toutes ses roues, puis **Saisir les pneus** : même pneu pour toutes, les cases
+     laissées vides gardent ce qui est déjà saisi (matricules roue par roue). Dans la fenêtre d'une
+     roue, **Même pneu que la roue précédente** reprend dimensions et marque.
+5. **Faire signer** le client au doigt ou au stylet (son nom se saisit dans la même fenêtre).
+6. Au besoin, écrire sur la page (ou **Ajuster** la fiche) : déplacer un texte, changer sa
    taille, ajouter une mention, une date, une croix ou une signature (pincer pour zoomer).
    Le bouton **plein écran** de la palette donne toute la tablette à la page, et le bouton
    **largeur** l'agrandit à la largeur de l'écran. Sur une feuille Mastra, les cases vides
    sont repérées en jaune sur la page : un appui les remplit ; en plein écran, « Manque : … »
    en bas ouvre directement la case suivante.
-6. **Envoyer à la compta** (barre du bas, avec le nom du fichier) : s'il manque quelque
+7. **Envoyer à la compta** (barre du bas, avec le nom du fichier) : s'il manque quelque
    chose, l'application dit précisément quoi avant l'envoi (y compris depuis la liste des
    bons, et bon par bon pour un envoi groupé). L'envoi reste possible (« Envoyer quand
    même ») : le bon est alors marqué **Envoyé incomplet**, avec ce qui manquait, sur la
@@ -149,6 +161,7 @@ désinstaller l'application (et perdre les bons enregistrés) pour installer une
   - `data/Completion.kt` : ce qu'il reste à remplir sur un bon (cadre « À compléter ») ;
     `data/Recap.kt` : récapitulatif mensuel pour la comptabilité ;
   - `ui/` : écrans (accueil, fiches presse mobile et poids lourds, document client, éditeur de page, signature, réglages) ;
+    `Inputs.kt` : saisie rapide (choix rapides, quantités − / +, pavé des dimensions) ;
     `Theme.kt` (graphite et jaune, police Barlow) et `Components.kt` (éléments communs).
 - `app/src/main/assets/templates/fiche_poids_lourds.pdf` : fiche poids lourds vierge (page 1 du PDF
   envoyé) ; `fiche_poids_lourds.jpg` : la même en image, pour l'aperçu à l'écran.
